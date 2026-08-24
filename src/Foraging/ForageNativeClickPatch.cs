@@ -2,11 +2,11 @@ using HarmonyLib;
 
 namespace ErenshorCraftingExpanded
 {
-    // Current-suite source already proves PlayerControl.LeftClick as Erenshor's native world-click
-    // boundary (the standalone Follow mod uses the same method). Consume it only when the pointer
-    // hits this mod's forage target; otherwise allow vanilla and all sibling behavior unchanged.
-    [HarmonyPatch(typeof(PlayerControl), "LeftClick")]
-    internal static class ForageNativeClickPatch
+    // Current Assembly-CSharp exposes PlayerControl.RightClick as a native world-RMB boundary and
+    // gates it with EventSystem.IsPointerOverGameObject. This prefix is failure-open and consumes
+    // only an RMB that the controller resolves to a Forgotten Roads forage interaction target.
+    [HarmonyPatch(typeof(PlayerControl), "RightClick")]
+    internal static class ForageNativeRightClickPatch
     {
         [HarmonyPrefix]
         [HarmonyPriority(Priority.First)]
@@ -14,13 +14,11 @@ namespace ErenshorCraftingExpanded
         {
             try
             {
-                return !ForageNodeController.TryHandleNativeLeftClick();
+                return !ForageNodeController.TryHandleNativeRightClick();
             }
             catch
             {
-                // Failure-open for the native click path. A broken forage interaction must never
-                // disable ordinary Erenshor left-click behavior, and any partially started gather
-                // (including optional StartLoot) must be terminated before native input resumes.
+                // A forage failure must never disable ordinary Erenshor right-click behavior.
                 try { ForageNodeController.RuntimeExceptionCleanup(); } catch { }
                 return true;
             }

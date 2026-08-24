@@ -2,37 +2,36 @@ namespace ErenshorCraftingExpanded
 {
     public enum ForageActiveGatherClickAction
     {
-        IgnoreSameNodeConsume = 0,
-        CancelDifferentNodeConsume = 1,
-        WorldPassThroughNoCancel = 2,
-        CancelTypingPassThrough = 3
+        ConsumeForageClick = 0,
+        CancelTypingPassThrough = 1,
+        CancelUiPassThrough = 2,
+        CancelWorldPassThrough = 3
     }
 
-    // Pure click policy while one global gather owns the transaction. This makes the anti-chain
-    // behavior explicit: a different herb consumes only the cancellation click and never becomes
-    // a new gather until the player clicks it again.
+    // During an active one-click channel, a later RMB on a forage node cannot steal the captured
+    // transaction. A genuine non-forage world RMB cancels the channel and passes through to native
+    // Erenshor; UI/chat remain native owners.
     public static class ForageActiveGatherClickPolicy
     {
-        public static ForageActiveGatherClickAction Evaluate(bool typing, bool hitForageNode, bool sameNode)
+        public static ForageActiveGatherClickAction Evaluate(bool typing, bool conflictingUiOwnsPointer, bool pointsAtForage)
         {
             if (typing) return ForageActiveGatherClickAction.CancelTypingPassThrough;
-            if (!hitForageNode) return ForageActiveGatherClickAction.WorldPassThroughNoCancel;
-            return sameNode
-                ? ForageActiveGatherClickAction.IgnoreSameNodeConsume
-                : ForageActiveGatherClickAction.CancelDifferentNodeConsume;
+            if (conflictingUiOwnsPointer) return ForageActiveGatherClickAction.CancelUiPassThrough;
+            if (!pointsAtForage) return ForageActiveGatherClickAction.CancelWorldPassThrough;
+            return ForageActiveGatherClickAction.ConsumeForageClick;
         }
 
         internal static string RunSelfTests()
         {
-            if (Evaluate(false, true, true) != ForageActiveGatherClickAction.IgnoreSameNodeConsume)
-                return "FAIL same-node click should be consumed/ignored";
-            if (Evaluate(false, true, false) != ForageActiveGatherClickAction.CancelDifferentNodeConsume)
-                return "FAIL different-node click should cancel/consume";
-            if (Evaluate(false, false, false) != ForageActiveGatherClickAction.WorldPassThroughNoCancel)
-                return "FAIL unrelated world click should pass through without changing gather";
-            if (Evaluate(true, true, true) != ForageActiveGatherClickAction.CancelTypingPassThrough)
-                return "FAIL typing should cancel/pass through before node policy";
-            return "PASS active gather click policy";
+            if (Evaluate(false, false, true) != ForageActiveGatherClickAction.ConsumeForageClick)
+                return "FAIL captured forage interaction should consume duplicate RMB";
+            if (Evaluate(false, false, false) != ForageActiveGatherClickAction.CancelWorldPassThrough)
+                return "FAIL non-forage RMB should cancel and remain native";
+            if (Evaluate(true, false, true) != ForageActiveGatherClickAction.CancelTypingPassThrough)
+                return "FAIL typing should cancel/pass through";
+            if (Evaluate(false, true, true) != ForageActiveGatherClickAction.CancelUiPassThrough)
+                return "FAIL UI should cancel/pass through";
+            return "PASS active one-click gather RMB policy";
         }
     }
 }

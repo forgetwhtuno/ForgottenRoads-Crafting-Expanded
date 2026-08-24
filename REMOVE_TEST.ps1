@@ -17,6 +17,7 @@ $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Write-Host '=== Erenshor Crafting Expanded - safe TEST restore ===' -ForegroundColor Cyan
 $GameDir = Resolve-CraftingGameDir $GameDir
 $installedDll = Join-Path (Join-Path $GameDir 'plugins') 'ErenshorCraftingExpanded.dll'
+$installedAssets = Join-Path (Join-Path (Join-Path $GameDir 'plugins') 'ErenshorCraftingExpanded') 'assets'
 $backupsRoot = Join-Path $ScriptRoot 'test-backups'
 if (-not (Test-Path $backupsRoot)) { Write-Host 'No test-backups directory found.'; return }
 
@@ -37,6 +38,16 @@ if (Test-Path $installedDll) {
     if (-not $expectedTestHash) { throw 'Backup session has no recorded test DLL hash; refusing to remove the current install.' }
     if ($currentHash -ne $expectedTestHash) {
         throw "Current installed DLL differs from this test session (current=$currentHash expected=$expectedTestHash). Refusing to overwrite/delete it."
+    }
+}
+
+$installedAssetsHashFile = Join-Path $targetSession.FullName 'installed-assets-sha256.txt'
+$expectedAssetsHash = if (Test-Path $installedAssetsHashFile) { (Get-Content -LiteralPath $installedAssetsHashFile -Raw).Trim().ToLowerInvariant() } else { '' }
+if (Test-Path $installedAssets -PathType Container) {
+    if (-not $expectedAssetsHash) { throw 'Backup session has no recorded content-asset hash; refusing to remove the current assets.' }
+    $currentAssetsHash = Get-CraftingDirectorySha256 $installedAssets
+    if ($currentAssetsHash -ne $expectedAssetsHash) {
+        throw "Current Crafting assets differ from this test session (current=$currentAssetsHash expected=$expectedAssetsHash). Refusing to overwrite/delete them."
     }
 }
 
@@ -61,6 +72,24 @@ else {
     if (Test-Path $installedDll) { Remove-Item -LiteralPath $installedDll -Force }
     if (Test-Path $installedDll) { throw 'Test DLL removal failed.' }
     Write-Host 'Test DLL removed; session had no prior install.' -ForegroundColor Green
+}
+
+$hadPriorAssets = $false
+$hadPriorAssetsFile = Join-Path $targetSession.FullName 'had-prior-assets.txt'
+if (Test-Path $hadPriorAssetsFile) { $hadPriorAssets = [bool]::Parse((Get-Content -LiteralPath $hadPriorAssetsFile -Raw).Trim()) }
+if (Test-Path $installedAssets) { Remove-Item -LiteralPath $installedAssets -Recurse -Force }
+if ($hadPriorAssets) {
+    $assetBackup = Join-Path $targetSession.FullName 'assets.bak'
+    $priorAssetsHashFile = Join-Path $targetSession.FullName 'prior-assets-sha256.txt'
+    if (-not (Test-Path $assetBackup -PathType Container) -or -not (Test-Path $priorAssetsHashFile)) { throw 'Prior content-asset backup metadata is incomplete; refusing restore.' }
+    $expectedPriorAssetsHash = (Get-Content -LiteralPath $priorAssetsHashFile -Raw).Trim().ToLowerInvariant()
+    if ((Get-CraftingDirectorySha256 $assetBackup) -ne $expectedPriorAssetsHash) { throw 'Prior content-asset backup hash verification failed; refusing restore.' }
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $installedAssets) | Out-Null
+    Copy-Item -LiteralPath $assetBackup -Destination $installedAssets -Recurse -Force
+    if ((Get-CraftingDirectorySha256 $installedAssets) -ne $expectedPriorAssetsHash) { throw 'Restored content-asset hash verification failed.' }
+    Write-Host "Restored prior content assets SHA-256: $expectedPriorAssetsHash" -ForegroundColor Green
+} else {
+    Write-Host 'Test content assets removed; session had no prior asset install.' -ForegroundColor Green
 }
 
 Set-Content -LiteralPath (Join-Path $targetSession.FullName 'restored.txt') -Value (Get-Date -Format 'o') -Encoding UTF8

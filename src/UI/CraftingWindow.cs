@@ -328,7 +328,7 @@ namespace ErenshorCraftingExpanded
 
             System.Text.StringBuilder builder = new System.Text.StringBuilder();
             builder.Append(model.HasRecipe ? '1' : '0').Append('|').Append(model.UsesNativeSpecialRules ? '1' : '0').Append('|');
-            builder.Append(recipe == null ? string.Empty : recipe.TemplateItemId).Append('|').Append(model.Title).Append('|').Append(model.StatusText).Append('|');
+            builder.Append(recipe == null ? string.Empty : recipe.TemplateItemId).Append('|').Append(model.Title).Append('|').Append(model.OutputQuantityText).Append('|').Append(model.StatusText).Append('|');
             for (int i = 0; i < model.Materials.Count; i++)
             {
                 CraftingMaterialDisplayModel material = model.Materials[i];
@@ -347,7 +347,9 @@ namespace ErenshorCraftingExpanded
                     ? templateName
                     : templateName + "  →  " + recipe.OutputItemName;
             }
-            _activeForgeStatus.text = model.StatusText;
+            _activeForgeStatus.text = string.IsNullOrEmpty(model.OutputQuantityText)
+                ? model.StatusText
+                : model.OutputQuantityText + "  •  " + model.StatusText;
             _activeForgeStatus.color = model.HasRecipe && CraftingController.LastCraftableCount > 0 ? RetainedUiKit.Edge : RetainedUiKit.Muted;
             RebuildMaterialRows(model.Materials);
         }
@@ -461,8 +463,12 @@ namespace ErenshorCraftingExpanded
             RectTransform item = RetainedUiKit.AddHorizontalRow("KnownRecipe", parent, CraftingPanelLayoutPolicy.KnownRecipeRowHeight, 6f);
             HorizontalLayoutGroup layout = item.GetComponent<HorizontalLayoutGroup>();
             if (layout != null) { layout.childControlWidth = true; layout.childForceExpandWidth = false; }
+            CustomRecipeDefinition recipe = CraftingRecipeCatalog.Production.Get(row.StableRecipeId);
+            string requirementSummary = CraftingKnowledgePresentationPolicy.BuildRecipeRequirementSummary(recipe);
             TextMeshProUGUI label = RetainedUiKit.AddLabel("Recipe", item,
-                (row.DisplayName ?? "Recipe") + "\nKNOWN  •  " + (row.StatusText ?? string.Empty), 11f, FontStyles.Normal, TextAlignmentOptions.MidlineLeft);
+                (row.DisplayName ?? "Recipe") + "\nKNOWN  •  " + (row.StatusText ?? string.Empty) +
+                (string.IsNullOrEmpty(requirementSummary) ? string.Empty : "\n" + requirementSummary),
+                10.5f, FontStyles.Normal, TextAlignmentOptions.MidlineLeft);
             LayoutElement le = label.gameObject.AddComponent<LayoutElement>();
             le.flexibleWidth = 1f; le.minWidth = 220f; le.minHeight = CraftingPanelLayoutPolicy.KnownRecipeRowHeight - 2f;
             if (row.CanRestore)
@@ -478,8 +484,12 @@ namespace ErenshorCraftingExpanded
 
         private static void AddLockedRecipeRow(RectTransform parent, RecipeBookRowModel row)
         {
+            CustomRecipeDefinition recipe = CraftingRecipeCatalog.Production.Get(row.StableRecipeId);
+            string requirementSummary = CraftingKnowledgePresentationPolicy.BuildRecipeRequirementSummary(recipe);
             TextMeshProUGUI label = AddRecipeLabel(parent,
-                (row.DisplayName ?? "Recipe") + "\nLOCKED  •  " + (row.LockReason ?? "Not yet learned"), false, CraftingPanelLayoutPolicy.LockedRecipeRowHeight);
+                (row.DisplayName ?? "Recipe") + "\nLOCKED  •  " + (row.LockReason ?? "Not yet learned") +
+                (string.IsNullOrEmpty(requirementSummary) ? string.Empty : "\n" + requirementSummary),
+                false, CraftingPanelLayoutPolicy.LockedRecipeRowHeight);
             label.color = RetainedUiKit.Muted;
         }
 

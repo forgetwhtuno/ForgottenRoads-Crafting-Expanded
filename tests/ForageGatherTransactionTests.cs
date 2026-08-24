@@ -1,4 +1,4 @@
-using ErenshorCraftingExpanded;
+﻿using ErenshorCraftingExpanded;
 
 internal static class ForageGatherTransactionTests
 {
@@ -12,6 +12,7 @@ internal static class ForageGatherTransactionTests
         internal bool DiscoveryKnown;
 
         internal bool Begin(long token) { return Node.TryBeginGather(token, 1.25f); }
+        internal bool Cancel(long token) { return Node.CancelGather(token); }
         internal void ReachGrant(long token)
         {
             Node.Tick(1.25f);
@@ -50,6 +51,15 @@ internal static class ForageGatherTransactionTests
         doubleClick.Complete(1, ForagingInventoryGrantResult.Success, false);
         if (doubleClick.GrantCalls != 1 || doubleClick.XpCommits != 1 || doubleClick.DiscoveryCommits != 1 || doubleClick.SuccessLedgerCommits != 1)
             return "FAIL successful gather was not exactly once";
+
+        Model cancelled = new Model();
+        if (!cancelled.Begin(5) || !cancelled.Cancel(5)) return "FAIL captured cancellation transition";
+        cancelled.Complete(5, ForagingInventoryGrantResult.Success, false);
+        if (cancelled.Node.Availability != ForageAvailability.Available || cancelled.GrantCalls != 0 ||
+            cancelled.XpCommits != 0 || cancelled.DiscoveryCommits != 0 || cancelled.SuccessLedgerCommits != 0)
+            return "FAIL cancelled gather committed reward/progression";
+        if (!cancelled.Begin(6)) return "FAIL cancelled gather did not release transaction for retry";
+        cancelled.Cancel(6);
 
         Model rejected = new Model();
         rejected.Begin(10); rejected.ReachGrant(10); rejected.Complete(10, ForagingInventoryGrantResult.InventoryRejected, false);

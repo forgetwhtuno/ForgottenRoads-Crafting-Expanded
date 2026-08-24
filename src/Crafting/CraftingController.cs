@@ -73,8 +73,10 @@ namespace ErenshorCraftingExpanded
                 CraftingRecipeProgressionService.OnCharacterChanged();
             }
             RecipeOwnershipController.Tick();
-            // Production recipe identities may remain inert while the mod is disabled, but native
-            // Template activation is owned by this gameplay tick and is removed again on disable.
+            // Expanded Forgotten Roads recipes use stable mod-owned ingredients/outputs and become
+            // active only after the current live forge proves its component shape. The older donor
+            // recipe experiment remains independently gated below.
+            ExpandedContentRecipeRegistry.Tick(CraftingConfig.EnableMod.Value && CraftingConfig.EnableExpandedContent != null && CraftingConfig.EnableExpandedContent.Value);
             ProductionNativeRecipeRegistry.Tick(CraftingConfig.EnableMod.Value && CraftingConfig.EnableProductionNativeRecipes != null && CraftingConfig.EnableProductionNativeRecipes.Value);
 
             if (!CraftingConfig.EnableMod.Value)
@@ -176,7 +178,7 @@ if (custom != null)
                     // Runtime-bound Crafting Expanded recipes award progression only while the
                     // exact native Template binding is active in this session. A persisted inert
                     // identity can remain in ItemDB for save safety but must never train Crafting.
-                    if (ProductionNativeRecipeRegistry.IsRegisteredCurrentSession(recipe.TemplateItemId))
+                    if (CraftingRecipeRuntimeRegistry.IsRegisteredCurrentSession(recipe.TemplateItemId))
                     {
                         int priorCrafts = Progress.GetSuccessfulCraftCount(recipe.TemplateItemId);
                         int xp = RecipeProgressionPolicy.XpForSuccessfulRecipe(Progress.Level, custom.MinimumCraftingLevel, priorCrafts);
@@ -308,6 +310,7 @@ if (custom != null)
             // Save Foraging state before resource/node shutdown clears runtime depletion state.
             ForagingProgressionController.Shutdown();
             ForageNodeController.Shutdown();
+            ExpandedContentRecipeRegistry.Tick(false);
             ProductionNativeRecipeRegistry.Shutdown();
             RecipeOwnershipController.Shutdown();
 

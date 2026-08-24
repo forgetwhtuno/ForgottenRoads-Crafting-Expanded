@@ -13,9 +13,16 @@ namespace ErenshorCraftingExpanded
         // separately so a future game update cannot silently remap a saved mod template.
         internal static readonly CustomRecipeCatalog Production = new CustomRecipeCatalog();
 
+        static CraftingRecipeCatalog()
+        {
+            ResetRuntimeProduction();
+        }
+
         internal static void ResetRuntimeProduction()
         {
             Production.Clear();
+            IList<CustomRecipeDefinition> expanded = ExpandedContentRecipes.All;
+            for (int i = 0; i < expanded.Count; i++) Production.TryAdd(expanded[i]);
         }
 
         internal static CustomRecipeRejectReason TryAddRuntimeProduction(CustomRecipeDefinition definition)
@@ -29,7 +36,7 @@ namespace ErenshorCraftingExpanded
             IList<CustomRecipeDefinition> recipes = Production.All;
             for (int i = 0; i < recipes.Count; i++)
                 if (CustomRecipeCatalog.ValidateShape(recipes[i]) != CustomRecipeRejectReason.None) return "FAIL production recipe catalog shape";
-            if (Production.Count != 0) return "FAIL production catalog should be runtime-bound in deterministic tests";
+            if (Production.Count != ExpandedContentRecipes.All.Count) return "FAIL expanded content should remain visible in deterministic recipe catalog";
             if (ProductionRecipePlan.All.Count < 5 || ProductionRecipePlan.All.Count > 12) return "FAIL production plan size";
             return "PASS crafting recipe catalog";
         }

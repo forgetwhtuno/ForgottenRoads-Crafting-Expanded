@@ -39,10 +39,21 @@ namespace ErenshorCraftingExpanded
         private Vector3 _fillBaseScale = Vector3.one;
         private CanvasGroup _group;
         private Vector3 _baseScale = Vector3.one;
+        private float _distanceScale = 1f;
+        private float _feedbackScale = 1f;
+        private Image _back;
+        private TextMeshProUGUI _text;
+        private static readonly Color NormalText = new Color(1f, 0.84f, 0.08f, 1f);
+        private static readonly Color TargetText = new Color(1f, 0.91f, 0.18f, 1f);
+        private static readonly Color ReadyText = new Color(1f, 0.97f, 0.38f, 1f);
+        private static readonly Color NormalBack = new Color(0.055f, 0.008f, 0.008f, 0.98f);
+        private static readonly Color ReadyBack = new Color(0.085f, 0.012f, 0.008f, 1f);
 
-        internal void Initialize(Image fill)
+        internal void Initialize(Image fill, Image back, TextMeshProUGUI text)
         {
             _fill = fill;
+            _back = back;
+            _text = text;
             _fillRect = fill == null ? null : fill.rectTransform;
             if (_fillRect != null) _fillBaseScale = _fillRect.localScale;
             _group = GetComponent<CanvasGroup>();
@@ -55,21 +66,44 @@ namespace ErenshorCraftingExpanded
         {
             SetFillFraction(1f);
             if (_group != null) _group.alpha = 1f;
-            transform.localScale = _baseScale;
+            _feedbackScale = 1f;
+            ApplyScale();
         }
 
         internal void SetGatherProgress(float progress01)
         {
             SetFillFraction(ForagePresentationPolicy.ResourceBarFill(progress01));
             if (_group != null) _group.alpha = 1f;
-            transform.localScale = _baseScale;
+            _feedbackScale = 1f;
+            ApplyScale();
         }
 
         internal void SetCompletionFeedback(float normalizedRemaining)
         {
             SetFillFraction(0f);
             if (_group != null) _group.alpha = ForagePresentationPolicy.CompletionFeedbackAlpha(normalizedRemaining);
-            transform.localScale = _baseScale * ForagePresentationPolicy.CompletionFeedbackScale(normalizedRemaining);
+            _feedbackScale = ForagePresentationPolicy.CompletionFeedbackScale(normalizedRemaining);
+            ApplyScale();
+        }
+
+        internal void SetInteractionState(bool targeted, bool ready)
+        {
+            if (_text != null) _text.color = ready ? ReadyText : (targeted ? TargetText : NormalText);
+            if (_back != null) _back.color = ready ? ReadyBack : NormalBack;
+        }
+
+        internal void SetDistanceScale(float scale)
+        {
+            if (float.IsNaN(scale) || float.IsInfinity(scale) || scale < 1f) scale = 1f;
+            if (scale > ForagePresentationPolicy.LabelMaximumDistanceScale) scale = ForagePresentationPolicy.LabelMaximumDistanceScale;
+            if (Mathf.Abs(_distanceScale - scale) < 0.002f) return;
+            _distanceScale = scale;
+            ApplyScale();
+        }
+
+        private void ApplyScale()
+        {
+            transform.localScale = _baseScale * (_distanceScale * _feedbackScale);
         }
 
         private void SetFillFraction(float fraction)
@@ -87,6 +121,8 @@ namespace ErenshorCraftingExpanded
             _fill = null;
             _fillRect = null;
             _group = null;
+            _back = null;
+            _text = null;
         }
     }
 
@@ -99,10 +135,12 @@ namespace ErenshorCraftingExpanded
         private const float MissingCameraProbeInterval = 0.25f;
         private Camera _camera;
         private float _nextCameraProbeTime;
+        private ForageNodeWorldLabelView _view;
 
         private void OnEnable()
         {
             _nextCameraProbeTime = 0f;
+            _view = GetComponent<ForageNodeWorldLabelView>();
             UpdateFacing();
         }
 
@@ -131,6 +169,11 @@ namespace ErenshorCraftingExpanded
                 // does not use labelPosition-cameraPosition LookRotation: that creates a world sign
                 // aimed at a point rather than a native-style overlay parallel to the view plane.
                 transform.rotation = _camera.transform.rotation;
+                if (_view != null)
+                {
+                    float distance = Vector3.Distance(_camera.transform.position, transform.position);
+                    _view.SetDistanceScale(ForagePresentationPolicy.CalculateLabelDistanceScale(distance));
+                }
                 ForageNodeWorldLabel.UpdateFacingDiagnostic(_camera, transform);
             }
             catch { }
@@ -157,13 +200,13 @@ namespace ErenshorCraftingExpanded
         internal static string LastBillboardCameraSummary = "camera=(unbound)";
         internal static string LastFacingDiagnostic = "facing=(unbound)";
 
-        internal static GameObject Create(GameObject nodeRoot, string displayName)
+        internal static GameObject Create(GameObject nodeRoot, string displayName, Bounds? rendererAnchor)
         {
             if (nodeRoot == null || string.IsNullOrEmpty(displayName)) return null;
             GameObject root = null;
             try
             {
-                Vector3 worldPosition = ResolveWorldPosition(nodeRoot);
+                Vector3 worldPosition = ResolveWorldPosition(nodeRoot, rendererAnchor);
                 root = new GameObject("ForageResourceLabel", typeof(RectTransform), typeof(Canvas));
                 // Do not parent this to vegetation. Native plant transforms can carry negative or
                 // non-uniform scale/rotation; the label remains a mod-owned world-space object with
@@ -195,6 +238,10 @@ namespace ErenshorCraftingExpanded
                 Image back = barBack.gameObject.AddComponent<Image>();
                 back.color = new Color(0.055f, 0.008f, 0.008f, 0.98f);
                 back.raycastTarget = false;
+                Outline barOutline = barBack.gameObject.AddComponent<Outline>();
+                barOutline.effectColor = new Color(0f, 0f, 0f, 1f);
+                barOutline.effectDistance = new Vector2(2.4f, -2.4f);
+                barOutline.useGraphicAlpha = false;
 
                 RectTransform barFill = CreateRect("ResourceBar", barBack);
                 Stretch(barFill, 1.5f, 1.5f, 1.5f, 1.5f);
@@ -218,9 +265,13 @@ namespace ErenshorCraftingExpanded
                 text.enableWordWrapping = false;
                 text.overflowMode = TextOverflowModes.Ellipsis;
                 text.raycastTarget = false;
+                Outline textOutline = textRect.gameObject.AddComponent<Outline>();
+                textOutline.effectColor = new Color(0f, 0f, 0f, 1f);
+                textOutline.effectDistance = new Vector2(1.6f, -1.6f);
+                textOutline.useGraphicAlpha = false;
 
                 ForageNodeWorldLabelView view = root.AddComponent<ForageNodeWorldLabelView>();
-                view.Initialize(fill);
+                view.Initialize(fill, back, text);
 
                 // Add the billboard only after the root has its final world position/scale and UI
                 // hierarchy, so OnEnable can establish a correct front face immediately.
@@ -274,6 +325,7 @@ namespace ErenshorCraftingExpanded
         {
             return "labelBillboard=screen-aligned-camera-rotation nameInBar=yes " + LastBillboardCameraSummary +
                 " labelScale=" + ForagePresentationPolicy.LabelWorldScale.ToString("F4") +
+                " distanceScaleMax=" + ForagePresentationPolicy.LabelMaximumDistanceScale.ToString("F2") +
                 " labelWorld=" + ForagePresentationPolicy.LabelWorldWidth().ToString("F2") + "x" +
                     ForagePresentationPolicy.LabelWorldHeight().ToString("F2") +
                 " barScale=" + ForagePresentationPolicy.BarWorldWidth().ToString("F2") + "x" +
@@ -297,8 +349,13 @@ namespace ErenshorCraftingExpanded
             return "(" + value.x.ToString("F3") + "," + value.y.ToString("F3") + "," + value.z.ToString("F3") + "," + value.w.ToString("F3") + ")";
         }
 
-        private static Vector3 ResolveWorldPosition(GameObject nodeRoot)
+        private static Vector3 ResolveWorldPosition(GameObject nodeRoot, Bounds? rendererAnchor)
         {
+            if (rendererAnchor.HasValue)
+            {
+                Bounds anchor = rendererAnchor.Value;
+                return new Vector3(anchor.center.x, anchor.max.y + VerticalGap, anchor.center.z);
+            }
             Vector3 fallback = nodeRoot.transform.position + Vector3.up * 1.35f;
             try
             {

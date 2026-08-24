@@ -289,6 +289,19 @@ namespace ErenshorCraftingExpanded
 
         internal static bool HasOwners { get { return Owners.Count > 0; } }
 
+        internal static bool HasOwner(object owner)
+        {
+            return owner != null && Owners.Contains(owner);
+        }
+
+        internal static bool HasOtherOwners(object owner)
+        {
+            if (Owners.Count == 0) return false;
+            if (owner == null) return true;
+            if (!Owners.Contains(owner)) return Owners.Count > 0;
+            return Owners.Count > 1;
+        }
+
         internal static void Acquire(object owner)
         {
             if (owner == null || Owners.Contains(owner)) return;

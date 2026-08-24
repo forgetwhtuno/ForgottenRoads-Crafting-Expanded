@@ -19,7 +19,9 @@ namespace ErenshorCraftingExpanded
     // are deterministic and testable here.
     public static class ForagePlacementPolicy
     {
-        public const int DesiredClusterCount = 3;
+        // Population target, not a placement override: the existing NavMesh, wall, ground,
+        // actor-clearance, LOS, and separation gates still decide how many safe points survive.
+        public const int DesiredClusterCount = 5;
         public const int MinimumUsefulClusterCount = 1;
         public const float ClusterMinimumSeparation = 18f;
 
@@ -126,8 +128,8 @@ namespace ErenshorCraftingExpanded
             }
             if (!hasPositiveLateral || !hasNegativeLateral) return "FAIL ground samples should probe both sides of the wall normal";
 
-            if (!IsUsableClusterCount(1) || !IsUsableClusterCount(2) || !IsUsableClusterCount(3)) return "FAIL 1-3 safe clusters should be accepted without forcing bad placement";
-            if (IsUsableClusterCount(0) || IsUsableClusterCount(4)) return "FAIL cluster count policy should remain bounded to at most three";
+            if (!IsUsableClusterCount(1) || !IsUsableClusterCount(2) || !IsUsableClusterCount(3) || !IsUsableClusterCount(4) || !IsUsableClusterCount(5)) return "FAIL 1-5 safe clusters should be accepted without forcing bad placement";
+            if (IsUsableClusterCount(0) || IsUsableClusterCount(6)) return "FAIL cluster count policy should remain bounded to at most five";
             if (!IsClusterSeparated(18f, 0f, 0f)) return "FAIL exact minimum cluster separation rejected";
             if (IsClusterSeparated(17.99f, 0f, 0f)) return "FAIL overlapping forage clusters accepted";
             if (IsClusterSeparated(float.NaN, 0f, 0f)) return "FAIL non-finite cluster separation accepted";

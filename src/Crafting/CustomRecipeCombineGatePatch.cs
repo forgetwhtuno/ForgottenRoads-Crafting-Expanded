@@ -53,7 +53,7 @@ namespace ErenshorCraftingExpanded
                 if (showMessage) try { UpdateSocialLog.LogAdd("[Crafting] Crafting Expanded recipes are disabled.", "yellow"); } catch { }
                 return false;
             }
-            if (!ProductionNativeRecipeRegistry.IsRegisteredCurrentSession(recipe.TemplateItemId))
+            if (!CraftingRecipeRuntimeRegistry.IsRegisteredCurrentSession(recipe.TemplateItemId))
             {
                 if (showMessage) try { UpdateSocialLog.LogAdd("[Crafting] This recipe is known but its native Template is not verified for the current session.", "yellow"); } catch { }
                 return false;

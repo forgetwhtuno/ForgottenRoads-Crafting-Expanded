@@ -15,7 +15,9 @@ namespace ErenshorCraftingExpanded
         CoveredFungi = 1,
         OpenFlowers = 2,
         CoveredMoss = 3,
-        OpenRoots = 4
+        OpenRoots = 4,
+        OpenFibers = 5,
+        OpenWood = 6
     }
 
     public static class ForageEnvironmentPolicy
@@ -49,7 +51,9 @@ namespace ErenshorCraftingExpanded
                 return pool == ForageResourcePool.CoveredFungi || pool == ForageResourcePool.CoveredMoss;
             return pool == ForageResourcePool.OpenHerbs ||
                 pool == ForageResourcePool.OpenFlowers ||
-                pool == ForageResourcePool.OpenRoots;
+                pool == ForageResourcePool.OpenRoots ||
+                pool == ForageResourcePool.OpenFibers ||
+                pool == ForageResourcePool.OpenWood;
         }
 
         public static ForageResourcePool[] AllPools()
@@ -60,7 +64,9 @@ namespace ErenshorCraftingExpanded
                 ForageResourcePool.CoveredFungi,
                 ForageResourcePool.OpenFlowers,
                 ForageResourcePool.CoveredMoss,
-                ForageResourcePool.OpenRoots
+                ForageResourcePool.OpenRoots,
+                ForageResourcePool.OpenFibers,
+                ForageResourcePool.OpenWood
             };
         }
 
@@ -72,6 +78,8 @@ namespace ErenshorCraftingExpanded
             if (ResourcePoolFor(ForageEnvironmentKind.Covered) != ForageResourcePool.CoveredFungi) return "FAIL covered primary resource pool";
             if (!IsPoolCompatible(ForageEnvironmentKind.Open, ForageResourcePool.OpenFlowers)) return "FAIL flowers should be open-compatible";
             if (!IsPoolCompatible(ForageEnvironmentKind.Open, ForageResourcePool.OpenRoots)) return "FAIL roots should be open-compatible";
+            if (!IsPoolCompatible(ForageEnvironmentKind.Open, ForageResourcePool.OpenFibers)) return "FAIL fibers should be open-compatible";
+            if (!IsPoolCompatible(ForageEnvironmentKind.Open, ForageResourcePool.OpenWood)) return "FAIL wood should be open-compatible";
             if (!IsPoolCompatible(ForageEnvironmentKind.Covered, ForageResourcePool.CoveredMoss)) return "FAIL moss should be covered-compatible";
             if (IsPoolCompatible(ForageEnvironmentKind.Covered, ForageResourcePool.OpenHerbs)) return "FAIL open herb leaked into covered point";
             if (IsPoolCompatible(ForageEnvironmentKind.Open, ForageResourcePool.CoveredFungi)) return "FAIL fungus leaked into open point";

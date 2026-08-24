@@ -8,12 +8,12 @@ using UnityEngine.SceneManagement;
 
 namespace ErenshorCraftingExpanded
 {
-    [LunarisPlugin("forgetwhtuno.erenshor.craftingexpanded", "0.2.4", "forgetwhtuno",
+    [LunarisPlugin("forgetwhtuno.erenshor.craftingexpanded", "0.3.5", "forgetwhtuno",
         "Horizontal-progression expansion to Erenshor's native crafting: forge quality-of-life, Smithing progression, an experimental commission PoC, and a mod-owned Foraging system.")]
     [LunarisPermission(LunarisPermission.FileAccess | LunarisPermission.Reflection | LunarisPermission.Harmony)]
     public sealed class ErenshorCraftingExpandedPlugin : LunarisPlugin
     {
-        internal const string Version = "0.2.4";
+        internal const string Version = "0.3.5";
         private Harmony _harmony;
         private CraftingExpandedSettings _settings;
         private CraftingSuiteAuraProvider _auraProvider;
@@ -67,6 +67,7 @@ namespace ErenshorCraftingExpanded
                 // PatchAll can fail after applying an earlier patch. Avoid leaving a partially
                 // patched feature set running under the false assumption that every hook exists.
                 try { _harmony.UnpatchSelf(); } catch { }
+                CraftingCameraUiOwnershipPatch.ResetRuntimeState();
                 _runtimeReady = false;
                 Logging.LogError("Erenshor Crafting Expanded is fail-closed for this session because its verified patch set was incomplete.");
             }
@@ -74,6 +75,7 @@ namespace ErenshorCraftingExpanded
             SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;
             Logging.LogInfo("Erenshor Crafting Expanded " + Version + " loaded.");
+            Logging.LogInfo("Crafting runtime marker: revision=crafting-0.3.5-forage-population-balance-r1");
         }
 
         private void Update()
@@ -133,11 +135,20 @@ namespace ErenshorCraftingExpanded
             CustomItemRegistrationOutcome fungus = CraftingExpandedItems.Outcome(CraftingExpandedItemIds.CaveMushroomId);
             Logging.LogInfo("  Cave Mushroom id=" + CraftingExpandedItemIds.CaveMushroomId +
                 " state=" + CraftingExpandedItems.State(CraftingExpandedItemIds.CaveMushroomId) +
-                " experimentalCovered=" + (ForagingConfig.ExperimentalCoveredResources != null && ForagingConfig.ExperimentalCoveredResources.Value ? "on" : "off") +
+                " coveredResources=" + (ForagingConfig.ExperimentalCoveredResources != null && ForagingConfig.ExperimentalCoveredResources.Value ? "on" : "off") +
                 " baseItem=" + (fungus == null || string.IsNullOrEmpty(fungus.BaseItemName) ? "(none found)" : fungus.BaseItemName) +
                 " baseVisual=" + (fungus == null || string.IsNullOrEmpty(fungus.BaseSelectionReason) ? "(not yet resolved)" : fungus.BaseSelectionReason));
+            Logging.LogInfo("  Expanded content enabled=" + (CraftingConfig.EnableExpandedContent != null && CraftingConfig.EnableExpandedContent.Value) +
+                " items=" + ExpandedContentItemRegistry.AvailableCount + "/" + ExpandedContentItems.All.Count +
+                " icons=" + ItemIconAssetLoader.LoadedCount + "/25" +
+                " recipeIdentities=" + ExpandedContentRecipeRegistry.IdentityCount + "/" + ExpandedContentRecipes.All.Count +
+                " activeRecipes=" + ExpandedContentRecipeRegistry.ActiveCount + "/" + ExpandedContentRecipes.All.Count +
+                " (active recipes are forge-gated)");
+            string expandedFailures = ExpandedContentItemRegistry.DescribeFailures(3);
+            if (!string.IsNullOrEmpty(expandedFailures)) Logging.LogWarning("  Expanded item registration issues: " + expandedFailures);
+            if (!string.IsNullOrEmpty(ExpandedContentRecipeRegistry.LastFailure)) Logging.LogInfo("  Expanded recipe status: " + ExpandedContentRecipeRegistry.LastFailure);
             Logging.LogInfo("  Native crafting probe: " + NativeCraftingRuntimeProbe.Describe());
-            Logging.LogInfo("  Native recipe experiment: " + ExperimentalNativeRecipeRegistry.Describe());
+            Logging.LogInfo("  Legacy native recipe experiment: " + ExperimentalNativeRecipeRegistry.Describe());
             string conflict = CraftingExpandedItems.ConflictingItemName();
             string failure = CraftingExpandedItems.LastFailureReason();
             if (!string.IsNullOrEmpty(conflict)) Logging.LogWarning("  Wild Herb id collision with existing item: " + conflict);
@@ -158,6 +169,7 @@ namespace ErenshorCraftingExpanded
             ErenshorCraftingExpandedPluginHolder.Instance = null;
             try { SceneManager.sceneLoaded -= OnSceneLoaded; SceneManager.sceneUnloaded -= OnSceneUnloaded; } catch { }
             try { if (_harmony != null) _harmony.UnpatchSelf(); } catch { }
+            CraftingCameraUiOwnershipPatch.ResetRuntimeState();
             _harmony = null;
             try { if (_auraProvider != null) _auraProvider.Unregister(); } catch { }
             _auraProvider = null;
@@ -180,9 +192,37 @@ namespace ErenshorCraftingExpanded
                 return true;
             }
 
+            if (command.Equals("/craftdiag worldtier", StringComparison.OrdinalIgnoreCase))
+            {
+                ClearChatInput(typeText); CraftingDiagnostics.ReportWorldTier(); return true;
+            }
+            if (command.Equals("/craftdiag resources", StringComparison.OrdinalIgnoreCase))
+            {
+                ClearChatInput(typeText); CraftingDiagnostics.ReportResources(); return true;
+            }
+            if (command.Equals("/craftdiag consumables", StringComparison.OrdinalIgnoreCase))
+            {
+                ClearChatInput(typeText); CraftingDiagnostics.ReportConsumables(); return true;
+            }
+            if (command.Equals("/craftdiag consumables native", StringComparison.OrdinalIgnoreCase))
+            {
+                ClearChatInput(typeText); CraftingDiagnostics.ReportNativeConsumables(); return true;
+            }
+            if (command.Equals("/craftdiag recipes", StringComparison.OrdinalIgnoreCase))
+            {
+                ClearChatInput(typeText); CraftingDiagnostics.ReportRecipes(); return true;
+            }
+
             // Development/test-only subcommand, not a real gameplay command - grants exactly
             // one Wild Herb through the same verified native inventory-grant path used
             // everywhere else in this mod. See docs/NATIVE_ITEM_REGISTRY_FINDINGS.md.
+            if (command.Equals("/craftdiag items", StringComparison.OrdinalIgnoreCase))
+            {
+                ClearChatInput(typeText);
+                CraftingDiagnostics.ReportItemSemantics();
+                return true;
+            }
+
             if (command.Equals("/craftdiag giveherb", StringComparison.OrdinalIgnoreCase))
             {
                 ClearChatInput(typeText);

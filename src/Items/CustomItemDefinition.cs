@@ -19,6 +19,12 @@ namespace ErenshorCraftingExpanded
         public int Value;
         public int DefaultGrantQuantity = 1;
         public CustomItemVisualKind VisualKind = CustomItemVisualKind.OrganicHerb;
+        public string Category = "resource";
+        public int Tier = 1;
+        public string Rarity = "common";
+        public string IconAssetPath = string.Empty;
+        public string IconDescription = string.Empty;
+        public string IconFallbackBehavior = "Retain the verified native donor icon if the mod icon cannot be loaded.";
 
         // Documents which base-item predicate produced the clone, for diagnostics only - not
         // used as authority for registration logic itself.

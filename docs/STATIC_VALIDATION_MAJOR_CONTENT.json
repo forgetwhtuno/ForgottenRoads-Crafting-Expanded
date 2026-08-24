@@ -1,0 +1,231 @@
+{
+  "passed": 45,
+  "total": 45,
+  "checks": [
+    {
+      "name": "art manifest schema",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "art manifest count",
+      "passed": true,
+      "detail": "25"
+    },
+    {
+      "name": "art IDs unique",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "art paths unique",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "art paths relative/safe",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "icon file count",
+      "passed": true,
+      "detail": "25"
+    },
+    {
+      "name": "icons 128x128",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "icons RGBA",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "icons have transparency",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "manifest files all exist",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "resource total",
+      "passed": true,
+      "detail": "9"
+    },
+    {
+      "name": "component total",
+      "passed": true,
+      "detail": "8"
+    },
+    {
+      "name": "equipment total",
+      "passed": true,
+      "detail": "8"
+    },
+    {
+      "name": "recipe total",
+      "passed": true,
+      "detail": "16"
+    },
+    {
+      "name": "content item IDs unique",
+      "passed": true,
+      "detail": "25"
+    },
+    {
+      "name": "art IDs match content IDs",
+      "passed": true,
+      "detail": "missing=set() extra=set()"
+    },
+    {
+      "name": "recipe IDs unique",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "recipe keys unique",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "recipe template range",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "item IDs in owned range",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "ingredient IDs resolve",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "recipe outputs resolve",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "ingredient qty positive",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "distinct ingredient bound <=3",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "crafting gates monotonic",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "no stale Press G prompt",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "no OnGUI retained regression",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "no keyboard gather read",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "nine resource definitions",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "sixteen stable recipe IDs in source",
+      "passed": true,
+      "detail": "['910110001', '910110002', '910110003', '910110004', '910110005', '910110006', '910110007', '910110008', '910110009', '910110010', '910110011', '910110012', '910110013', '910110014', '910110015', '910110016']"
+    },
+    {
+      "name": "stable item constants 25",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "icon traversal guard",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "icon donor fallback text",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "icon hot reload marker",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "renderer scan isolated to scanner",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "bounded visual retry constant",
+      "passed": true,
+      "detail": "controller contains 8-second retry evidence"
+    },
+    {
+      "name": "interaction/presentation constants",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "expanded content default on",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "covered resources default on",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "interaction range 4.25",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "new files avoid known C#>5 syntax",
+      "passed": true,
+      "detail": "[]"
+    },
+    {
+      "name": "C# delimiter balance heuristic",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "install validates icon manifest",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "install hashes assets",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "remove protects changed assets",
+      "passed": true,
+      "detail": ""
+    }
+  ]
+}

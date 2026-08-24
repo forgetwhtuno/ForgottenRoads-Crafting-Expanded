@@ -90,7 +90,7 @@ is any `Item` other than the three special-case IDs above):
 `Smithing.DoSuccess()`:
 - Plays the success sound/particle and logs `"Item successfully forged!"`.
 - Sets `Components[0].MyItem = Template.MyItem.TemplateRewards[0]` (the output item).
-- If the output's `Item.RequiredSlot` is *not* `Primary` (16) or `Secondary` (17) — i.e. not a
+- If the output's `Item.RequiredSlot` is *not* `Primary` (13) or `Secondary` (14) — i.e. not a
   weapon — sets `Components[0].Quantity = FuelSource.MyItem.FuelLevel + 1`
   (`FuelTier.one`(0)→1 up to `FuelTier.five`(4)→5). **This is the native "fuel tier controls output
   quantity for stackable/consumable results" behavior** — the closest thing to a quality/tier lever
@@ -211,3 +211,12 @@ Before invoking repeated native `QuickSmith()` calls it verifies that all alread
 Components belong to the active recipe and that none already exceed the recipe-required count. A
 malformed forge setup is left untouched for native `Smithing.Combine()` to reject/explain. This is
 a QoL precondition only; native `Combine()` remains authoritative.
+
+
+## Major-content implementation note (2026-08-20)
+
+The current 0.2.4-based worktree uses the verified native quantity behavior above rather than replacing
+`Smithing.DoSuccess()`. Expanded processed materials are General-slot stackable outputs, so the retained
+Crafting UI presents them as **1–5 output by native fuel tier**. The current expanded equipment set uses
+only verified Primary/Secondary weapon or shield donors, so those recipes present **1 output**. No custom
+quality/stat formula is substituted for native donor item data.

@@ -42,12 +42,12 @@ namespace ErenshorCraftingExpanded
                     DisplayName = resource.DisplayName,
                     ItemId = resource.RewardItemId,
                     Source = MaterialSourceKind.Foraging,
-                    LevelOrEnvironment = "Foraging " + resource.MinimumSkill + " / " + resource.Pool,
+                    LevelOrEnvironment = "World " + WorldThreatPolicy.DisplayName(resource.WorldBand) + " / Foraging " + resource.MinimumSkill + " / " + resource.Pool,
                     RarityOrDensity = resource.Rarity + " / weight " + resource.DensityWeight +
                         " / scene cap " + resource.MaxAutoNodesPerScene,
                     Renewable = true,
                     CraftingExpandedShouldCreate = true,
-                    Evidence = "world={" + resource.VisualEvidenceRequirement + "}; itemDonor={" + resource.ItemDonorEvidenceRequirement + "}; discovery=" + resource.DiscoveryRule,
+                    Evidence = "worldBand=" + WorldThreatPolicy.DisplayName(resource.WorldBand) + "; visual={" + resource.VisualEvidenceRequirement + "}; itemDonor={" + resource.ItemDonorEvidenceRequirement + "}; discovery=" + resource.DiscoveryRule,
                     FutureCraftingPurpose = resource.FutureCraftingPurpose
                 });
             }

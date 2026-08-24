@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.3.5 - forage population balance
+
+- Raises the safe auto-placement target envelope from three to five clusters without weakening
+  NavMesh, wall, ground, actor-clearance, LOS, or separation checks.
+- Adds deterministic Starter-area population floors for Wild Herb, Resin Sprig, and Field Fiber
+  before normal evidence-backed weighted selection fills remaining safe points.
+- Preserves the 0.3.4 visual validation, node interaction, gather transaction, reward, XP, and
+  depletion behavior unchanged.
+
+## 0.3.4 - forage visual presentation hardening
+
+- Rejects cloned forage visuals without active renderable mesh/material, valid scale/bounds, renderer-anchor coherence, and post-grounding proof.
+- Prevents label, highlight, and interaction binding until final production renderer bounds are audited.
+- Adds bounded `forage_visual_spawn` provenance and larger outlined world resource presentation.
+
+## 0.2.5 - One-click RMB forage interaction polish
+
+- Replaced normal hold-LMB gathering with one-click RMB admission at the current native
+  `PlayerControl.RightClick` boundary. Crafting consumes only a right-click whose explicit forage ray
+  resolves a valid mod-owned resource; UI/non-forage/world RMB remains native.
+- Split the interaction lifecycle into hover candidate -> selected -> gathering -> completed/cancelled.
+  Once gathering begins, the captured node/token remains authoritative; camera motion, hover loss and
+  aim loss do not interrupt the channel.
+- Added a deliberate 0.10-world-unit movement tolerance. Meaningful local-player displacement cancels
+  with `player-moved`; tiny idle jitter does not.
+- Damage cancellation now observes actual local-player HP decreases against the most recently observed
+  HP. Healing and zero-damage changes do not cancel; player death is a separate terminal reason.
+- Temporary camera/input ownership now exists only for the initiating forage RMB press and is released
+  when the physical button is released while the gather timer continues.
+- Idle forage nodes no longer show the persistent selection ring. Hover uses a restrained inner cue;
+  selected/gathering state owns the stronger ring and all terminal paths clear it.
+- Preserved the live-proven exact-once grant -> XP -> depletion transaction, own-collider LOS exclusion,
+  real-world LOS blocking, enlarged non-blocking interaction target, item/inventory semantics, stable IDs,
+  recipes, icon intent, placement, NRE repair and conservative equipment donor policy.
+- Expanded deterministic/static coverage for RMB containment, capture authority, movement/damage
+  interruptions, highlight lifecycle, exact-once reward authority and current input-surface evidence.
+- This source candidate remains live-QA gated; no release-readiness claim is made from static tests alone.
+
 ## 0.2.4 - Forgotten Roads launcher/header chrome
 
 Current release candidate. It carries forward the 0.2.3 gather-interaction/transaction work below
@@ -297,3 +335,14 @@ and no row of the suite-level ordered live matrix is certified for this candidat
 - Kept standalone commands and core gameplay authority intact.
 - Documented the retained panel/launcher policy and Lunaris live-test requirement.
 - Standardized the Crafting panel on a runtime-Rect/header-only drag model, added Reset Position, persisted runtime config mutations, and kept diagnostic/asset-survey features developer-only.
+
+## Unreleased — Major content / itemization worktree
+
+- Expanded Foraging from five to nine evidence-gated resource families.
+- Added eight processed components and sixteen linked progression recipes.
+- Added eight conservative native-donor-backed crafted weapons/shields.
+- Added 25 manifest-backed transparent inventory icons with safe donor-icon fallback.
+- Increased production forage visibility/range and retained bounded scene scanning.
+- Expanded recipe UI output/requirement/lock presentation, including native 1–5 fuel-tier quantity for General outputs.
+- Added stable expanded item/recipe IDs, collision checks, lifecycle rebinds, icon/install hashing, and new deterministic/static validation contracts.
+- No release-readiness claim until the new content passes the documented live gameplay checklist.

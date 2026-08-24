@@ -1,0 +1,28 @@
+# Major Content Live-Test Checklist
+
+This checklist is intentionally the final authority for the new content. Static tests and assembly inspection do **not** make the worktree release-ready.
+
+- [ ] On the current Windows game install, run `powershell -ExecutionPolicy Bypass -File .\BUILD.ps1` and confirm zero compiler errors against that install's current Erenshor/Lunaris assemblies.
+- [ ] Run `powershell -ExecutionPolicy Bypass -File .\INSTALL_TEST.ps1`; confirm the DLL **and** `assets/` are installed and the script reports verified hashes.
+- [ ] Start Erenshor under Lunaris with no other Forgotten Roads modules required. Confirm Crafting Expanded loads standalone with no exceptions.
+- [ ] Run `/craftdiag`. Confirm expanded content is enabled, `items=20/20`, `itemFailures=0`, `icons=25/25`, and `recipeIdentities=16/16`. `activeRecipes` may remain below 16 until a live forge has been observed; any failure text must be investigated rather than ignored.
+- [ ] In an eligible open zone, visually inspect auto-placed nodes. Confirm the three-clump resource patches are noticeable (~0.78 world-unit normalized target), labels are readable, nodes sit on reachable terrain rather than inside rocks/trees, and no obvious overlaps/duplicates appear.
+- [ ] Confirm gathering is left-click only within the configured 4.25 range. There must be no `Press G to gather` prompt or keyboard gather behavior.
+- [ ] Start a gather and test: normal completion; moving away; entering combat; clicking a different node; zoning/unloading; and inventory-full failure. Confirm only a proven successful native inventory grant depletes the node and awards XP/discovery exactly once.
+- [ ] Gather/revisit Wild Herb, Field Fiber, Resin Sprig, Wild Bloom, and Starleaf in open scenes where their required current-scene visual evidence exists. Verify locked skill feedback at low Foraging and successful discovery at/above each milestone.
+- [ ] In a covered/cave scene with matching current-scene visuals, test Cave Mushroom, Cave Moss, and Ghostcap. Confirm no covered resource appears from a scene-name guess when matching evidence is absent.
+- [ ] Visit `The Blight`; verify Blightroot appears only when both the regional rule and root/briar visual evidence pass. Confirm it does not appear in unrelated scenes.
+- [ ] Gather a node, zone away/back, disable/re-enable Foraging, and restart the game. Confirm its remaining cooldown persists for the same character and no duplicate gather reward is created.
+- [ ] Use the survey/scanner and Crafting panel throughout progression. Confirm it explains resource skill gates, discoveries, known/locked recipes, required materials, output item, quantity behavior, and meaningful failure reason without requiring oversized/unbounded panel growth.
+- [ ] Open a native forge. Re-run `/craftdiag`; confirm all 16 expanded recipe identities activate when the current forge shape/items support them. If any stay inactive, record the exact `recipeStatus`/item failure instead of forcing registration.
+- [ ] Learn/recover recipe Templates through the existing recipe-knowledge flow. Verify Known/Locked rows, crafting/foraging/discovery gates, and physical-template recovery do not erase permanent recipe knowledge.
+- [ ] Craft Woven Fiber Cord, Herbal Binder, Resin-Sealed Grip, Bloom Tincture, Starleaf Infusion, Cave Paste, Ghostcap Extract, and Root Temper using multiple native fuel tiers. Confirm General outputs produce the native 1–5 quantity and the UI's quantity hint matches what `DoSuccess()` actually creates.
+- [ ] Craft Trailwood Cudgel, Barkguard Buckler, Briar Knife, Bloomwood Staff, Starleaf Longbow, Ghostcap Shiv, Blightroot Blade, and Rootbound Guard. Confirm each produces exactly one item.
+- [ ] Inspect/equip all eight crafted gear outputs. Confirm inventory name/lore/icon are mod-owned, the item goes to the expected Primary/Secondary slot, weapon/shield behavior matches the donor family, and the preserved native stats/classes are sensible for the target item level rather than obviously overpowered.
+- [ ] Compare each crafted gear item against several native drops/vendor/AH items around its target level. Record any donor whose stats are clearly too strong/weak for the crafting gate so target item levels can be tuned after live play.
+- [ ] Confirm all 25 implemented resources/components/gear items display their intended icon at normal inventory scale. Open/close inventory repeatedly, zone, and hot reload once under Lunaris; confirm icons do not multiply/leak visibly or revert unexpectedly.
+- [ ] Missing-icon fallback test: back up one PNG, temporarily rename it before startup/reload, then confirm that item still registers and displays its safe donor icon with a diagnostic failure rather than a null/broken item. Restore the PNG afterward.
+- [ ] Verify old 0.2.4 character data: Crafting level/XP, Foraging level/XP, discoveries, known recipes, and depletion state remain intact. New content should appear as additive state only.
+- [ ] Inventory/bank/save smoke: place crafted items in normal inventory, zone, disconnect normally, relaunch, and verify IDs/names/icons/stack quantities resolve. Bank/vendor/trade/AH surfaces should only be claimed safe after they are explicitly exercised.
+- [ ] Lunaris hot unload/reload: confirm no duplicate Crafting panel/launcher, no duplicate world nodes, no stale ItemDB exceptions, and `/craftdiag` rebinds item/recipe identities to the live database.
+- [ ] Run `REMOVE_TEST.ps1` only after testing; confirm it refuses to overwrite anything if the installed DLL/assets changed since the recorded test session and otherwise restores the prior target cleanly.

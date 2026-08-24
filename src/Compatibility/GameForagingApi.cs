@@ -374,14 +374,18 @@ namespace ErenshorCraftingExpanded
 
                 MeshFilter sourceFilter = source.GetComponent<MeshFilter>();
                 MeshRenderer sourceRenderer = source.GetComponent<MeshRenderer>();
-                if (sourceFilter != null && sourceRenderer != null && sourceFilter.sharedMesh != null)
+                if (sourceFilter != null && sourceRenderer != null && sourceFilter.sharedMesh != null && HasUsableSharedMaterial(sourceRenderer))
                 {
                     MeshFilter filter = target.gameObject.AddComponent<MeshFilter>();
                     filter.sharedMesh = sourceFilter.sharedMesh;
 
                     MeshRenderer renderer = target.gameObject.AddComponent<MeshRenderer>();
                     renderer.sharedMaterials = sourceRenderer.sharedMaterials;
-                    renderer.enabled = sourceRenderer.enabled;
+                    // The clone is a new, mod-owned presentation object. A scanned source can
+                    // legitimately be disabled by native LOD/scene state; preserving that flag
+                    // would create an invisible interactable resource. Keep the shared mesh and
+                    // materials, but enable the clone's own renderer.
+                    renderer.enabled = true;
                     renderer.shadowCastingMode = sourceRenderer.shadowCastingMode;
                     renderer.receiveShadows = sourceRenderer.receiveShadows;
                     renderer.lightProbeUsage = sourceRenderer.lightProbeUsage;
@@ -418,6 +422,23 @@ namespace ErenshorCraftingExpanded
             }
             catch { }
             return hasVisual;
+        }
+
+        // Bounds alone do not prove a MeshRenderer can draw. A few native donor branches carry
+        // geometry for LOD/authoring purposes but no usable material; cloning those produced an
+        // invisible yet otherwise interactable forage node.
+        private static bool HasUsableSharedMaterial(MeshRenderer renderer)
+        {
+            if (renderer == null) return false;
+            try
+            {
+                Material[] materials = renderer.sharedMaterials;
+                if (materials == null || materials.Length == 0) return false;
+                for (int i = 0; i < materials.Length; i++)
+                    if (materials[i] != null && materials[i].shader != null) return true;
+            }
+            catch { }
+            return false;
         }
 
         // Tint only the mod-owned renderers via MaterialPropertyBlock. The shader/property has

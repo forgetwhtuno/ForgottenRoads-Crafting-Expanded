@@ -1,0 +1,687 @@
+{
+  "schema_version": 2,
+  "source_baseline": "0.3.0",
+  "workstream": "world-tier-consumables-expansion",
+  "current_assembly_sha256": "B840CB8076ED0553F7DC3BEB4042ABA653917882F763181EC0D2C13C26C17847",
+  "counts": {
+    "forage_resources_total": 16,
+    "processed_components": 8,
+    "crafted_consumables": 5,
+    "crafted_equipment": 8,
+    "expanded_recipes": 21,
+    "icon_assets": 25,
+    "world_bands": 5
+  },
+  "world_tier_policy": {
+    "minimum_hostile_samples": 5,
+    "statistics": [
+      "median",
+      "75th percentile",
+      "maximum diagnostic only"
+    ],
+    "bands": {
+      "Starter": "median <= 6 and p75 <= 9",
+      "Low-mid": "median <= 11 and p75 <= 16",
+      "Mid": "median <= 18 and p75 <= 24",
+      "Mid-high": "median <= 26 and p75 <= 32",
+      "High": "above Mid-high thresholds"
+    },
+    "sparse_fallback": "Unknown/fail-closed; no proven native zone-level metadata",
+    "player_level_scaled": false
+  },
+  "resources": [
+    {
+      "id": "910000001",
+      "name": "Wild Herb",
+      "foraging": 1,
+      "xp": 20,
+      "rarity": "Common",
+      "respawn_seconds": 300,
+      "pool": "OpenHerbs",
+      "density_weight": 10,
+      "max_auto_nodes": 3,
+      "world_band": "Starter",
+      "purpose": "baseline herbal preparations and simple restorative recipes"
+    },
+    {
+      "id": "910000006",
+      "name": "Field Fiber",
+      "foraging": 3,
+      "xp": 24,
+      "rarity": "Common",
+      "respawn_seconds": 300,
+      "pool": "OpenFibers",
+      "density_weight": 8,
+      "max_auto_nodes": 2,
+      "world_band": "Starter",
+      "purpose": "cordage, bindings, bows, shields, and workshop components"
+    },
+    {
+      "id": "910000007",
+      "name": "Resin Sprig",
+      "foraging": 6,
+      "xp": 28,
+      "rarity": "Common",
+      "respawn_seconds": 330,
+      "pool": "OpenWood",
+      "density_weight": 7,
+      "max_auto_nodes": 2,
+      "world_band": "Starter",
+      "purpose": "resin grips, hardened bindings, weapons, and shields"
+    },
+    {
+      "id": "910000002",
+      "name": "Cave Mushroom",
+      "foraging": 8,
+      "xp": 32,
+      "rarity": "Uncommon",
+      "respawn_seconds": 420,
+      "pool": "CoveredFungi",
+      "density_weight": 6,
+      "max_auto_nodes": 2,
+      "world_band": "Starter",
+      "purpose": "cave tonics, alchemical reagents, and dungeon-focused consumables"
+    },
+    {
+      "id": "910000010",
+      "name": "Meadow Reed",
+      "foraging": 9,
+      "xp": 34,
+      "rarity": "Common",
+      "respawn_seconds": 330,
+      "pool": "OpenFibers",
+      "density_weight": 6,
+      "max_auto_nodes": 2,
+      "world_band": "Low-mid",
+      "purpose": "travel cordage and early crafted tonics"
+    },
+    {
+      "id": "910000011",
+      "name": "Amberbark",
+      "foraging": 12,
+      "xp": 36,
+      "rarity": "Uncommon",
+      "respawn_seconds": 390,
+      "pool": "OpenWood",
+      "density_weight": 5,
+      "max_auto_nodes": 1,
+      "world_band": "Low-mid",
+      "purpose": "travel preparations and mid-tier wood/resin recipes"
+    },
+    {
+      "id": "910000003",
+      "name": "Wild Bloom",
+      "foraging": 14,
+      "xp": 38,
+      "rarity": "Uncommon",
+      "respawn_seconds": 360,
+      "pool": "OpenFlowers",
+      "density_weight": 4,
+      "max_auto_nodes": 1,
+      "world_band": "Low-mid",
+      "purpose": "pigments, restorative preparations, and light utility elixirs"
+    },
+    {
+      "id": "910000012",
+      "name": "Sunpetal",
+      "foraging": 16,
+      "xp": 42,
+      "rarity": "Uncommon",
+      "respawn_seconds": 450,
+      "pool": "OpenFlowers",
+      "density_weight": 3,
+      "max_auto_nodes": 1,
+      "world_band": "Low-mid",
+      "purpose": "mid-tier recovery preparations and Starleaf refinement"
+    },
+    {
+      "id": "910000008",
+      "name": "Starleaf",
+      "foraging": 18,
+      "xp": 46,
+      "rarity": "Rare",
+      "respawn_seconds": 600,
+      "pool": "OpenHerbs",
+      "density_weight": 2,
+      "max_auto_nodes": 1,
+      "world_band": "Mid",
+      "purpose": "mid/high-tier infusions, bows, and refined tonics"
+    },
+    {
+      "id": "910000013",
+      "name": "Ironvine Root",
+      "foraging": 22,
+      "xp": 50,
+      "rarity": "Uncommon",
+      "respawn_seconds": 540,
+      "pool": "OpenRoots",
+      "density_weight": 4,
+      "max_auto_nodes": 1,
+      "world_band": "Mid",
+      "purpose": "mid/high root temper and durable workshop components"
+    },
+    {
+      "id": "910000004",
+      "name": "Cave Moss",
+      "foraging": 24,
+      "xp": 52,
+      "rarity": "Rare",
+      "respawn_seconds": 540,
+      "pool": "CoveredMoss",
+      "density_weight": 3,
+      "max_auto_nodes": 1,
+      "world_band": "Mid",
+      "purpose": "binding agents and higher-tier dungeon remedies"
+    },
+    {
+      "id": "910000009",
+      "name": "Ghostcap",
+      "foraging": 30,
+      "xp": 62,
+      "rarity": "Rare",
+      "respawn_seconds": 720,
+      "pool": "CoveredFungi",
+      "density_weight": 2,
+      "max_auto_nodes": 1,
+      "world_band": "Mid-high",
+      "purpose": "specialist cave extracts and rare dagger finishing"
+    },
+    {
+      "id": "910000005",
+      "name": "Blightroot",
+      "foraging": 36,
+      "xp": 68,
+      "rarity": "Rare",
+      "respawn_seconds": 660,
+      "pool": "OpenRoots",
+      "density_weight": 2,
+      "max_auto_nodes": 1,
+      "world_band": "Mid-high",
+      "purpose": "late regional reagents and root temper"
+    },
+    {
+      "id": "910000014",
+      "name": "Duskleaf",
+      "foraging": 42,
+      "xp": 76,
+      "rarity": "Rare",
+      "respawn_seconds": 780,
+      "pool": "OpenHerbs",
+      "density_weight": 2,
+      "max_auto_nodes": 1,
+      "world_band": "High",
+      "purpose": "late provisions and high-tier herbal work"
+    },
+    {
+      "id": "910000015",
+      "name": "Elder Resin",
+      "foraging": 46,
+      "xp": 82,
+      "rarity": "Rare",
+      "respawn_seconds": 840,
+      "pool": "OpenWood",
+      "density_weight": 2,
+      "max_auto_nodes": 1,
+      "world_band": "High",
+      "purpose": "late provisions and hardened high-tier compounds"
+    },
+    {
+      "id": "910000016",
+      "name": "Voidcap",
+      "foraging": 49,
+      "xp": 90,
+      "rarity": "Rare",
+      "respawn_seconds": 900,
+      "pool": "CoveredFungi",
+      "density_weight": 1,
+      "max_auto_nodes": 1,
+      "world_band": "High",
+      "purpose": "late specialist provisions where a proven native utility donor exists"
+    }
+  ],
+  "consumables": [
+    {
+      "id": "910030001",
+      "name": "Field Tonic",
+      "tier": 1,
+      "rarity": "common",
+      "max_native_donor_item_level": 6,
+      "item_value": 1,
+      "native_family": "AnyRecovery",
+      "effect_authority": "preserve exact donor ItemEffectOnClick; fail closed if no safe live donor"
+    },
+    {
+      "id": "910030002",
+      "name": "Wayfarer Tonic",
+      "tier": 2,
+      "rarity": "uncommon",
+      "max_native_donor_item_level": 14,
+      "item_value": 1,
+      "native_family": "AnyRecovery",
+      "effect_authority": "preserve exact donor ItemEffectOnClick; fail closed if no safe live donor"
+    },
+    {
+      "id": "910030003",
+      "name": "Cave Draught",
+      "tier": 3,
+      "rarity": "uncommon",
+      "max_native_donor_item_level": 24,
+      "item_value": 1,
+      "native_family": "ManaRecovery",
+      "effect_authority": "preserve exact donor ItemEffectOnClick; fail closed if no safe live donor"
+    },
+    {
+      "id": "910030004",
+      "name": "Starleaf Tonic",
+      "tier": 4,
+      "rarity": "rare",
+      "max_native_donor_item_level": 32,
+      "item_value": 2,
+      "native_family": "AnyRecovery",
+      "effect_authority": "preserve exact donor ItemEffectOnClick; fail closed if no safe live donor"
+    },
+    {
+      "id": "910030005",
+      "name": "Rootward Provision",
+      "tier": 5,
+      "rarity": "rare",
+      "max_native_donor_item_level": 35,
+      "item_value": 1,
+      "native_family": "Utility",
+      "effect_authority": "preserve exact donor ItemEffectOnClick; fail closed if no safe live donor"
+    }
+  ],
+  "recipes": [
+    {
+      "key": "fr.field_cord",
+      "template_id": "910110001",
+      "output": "Woven Fiber Cord",
+      "crafting": 1,
+      "foraging": 3,
+      "ingredients": [
+        {
+          "name": "Field Fiber",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "key": "fr.herbal_binder",
+      "template_id": "910110002",
+      "output": "Herbal Binder",
+      "crafting": 3,
+      "foraging": 3,
+      "ingredients": [
+        {
+          "name": "Wild Herb",
+          "quantity": 2
+        },
+        {
+          "name": "Field Fiber",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.field_tonic",
+      "template_id": "910110017",
+      "output": "Field Tonic",
+      "crafting": 4,
+      "foraging": 3,
+      "ingredients": [
+        {
+          "name": "Wild Herb",
+          "quantity": 3
+        },
+        {
+          "name": "Field Fiber",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "key": "fr.resin_grip",
+      "template_id": "910110003",
+      "output": "Resin-Sealed Grip",
+      "crafting": 5,
+      "foraging": 6,
+      "ingredients": [
+        {
+          "name": "Resin Sprig",
+          "quantity": 2
+        },
+        {
+          "name": "Woven Fiber Cord",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.trailwood_cudgel",
+      "template_id": "910110004",
+      "output": "Trailwood Cudgel",
+      "crafting": 6,
+      "foraging": 6,
+      "ingredients": [
+        {
+          "name": "Resin-Sealed Grip",
+          "quantity": 1
+        },
+        {
+          "name": "Herbal Binder",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.barkguard_buckler",
+      "template_id": "910110005",
+      "output": "Barkguard Maul",
+      "crafting": 8,
+      "foraging": 6,
+      "ingredients": [
+        {
+          "name": "Woven Fiber Cord",
+          "quantity": 2
+        },
+        {
+          "name": "Resin Sprig",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "key": "fr.bloom_tincture",
+      "template_id": "910110006",
+      "output": "Bloom Tincture",
+      "crafting": 10,
+      "foraging": 14,
+      "ingredients": [
+        {
+          "name": "Wild Bloom",
+          "quantity": 2
+        },
+        {
+          "name": "Wild Herb",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.briar_knife",
+      "template_id": "910110007",
+      "output": "Briar Knife",
+      "crafting": 12,
+      "foraging": 14,
+      "ingredients": [
+        {
+          "name": "Resin-Sealed Grip",
+          "quantity": 1
+        },
+        {
+          "name": "Bloom Tincture",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.wayfarer_tonic",
+      "template_id": "910110018",
+      "output": "Wayfarer Tonic",
+      "crafting": 13,
+      "foraging": 14,
+      "ingredients": [
+        {
+          "name": "Amberbark",
+          "quantity": 2
+        },
+        {
+          "name": "Meadow Reed",
+          "quantity": 2
+        },
+        {
+          "name": "Herbal Binder",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.starleaf_infusion",
+      "template_id": "910110008",
+      "output": "Starleaf Infusion",
+      "crafting": 17,
+      "foraging": 18,
+      "ingredients": [
+        {
+          "name": "Starleaf",
+          "quantity": 2
+        },
+        {
+          "name": "Wild Bloom",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.bloomwood_staff",
+      "template_id": "910110009",
+      "output": "Bloomwood Staff",
+      "crafting": 18,
+      "foraging": 18,
+      "ingredients": [
+        {
+          "name": "Resin-Sealed Grip",
+          "quantity": 1
+        },
+        {
+          "name": "Starleaf Infusion",
+          "quantity": 1
+        },
+        {
+          "name": "Resin Sprig",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "key": "fr.cave_paste",
+      "template_id": "910110010",
+      "output": "Cave Paste",
+      "crafting": 22,
+      "foraging": 24,
+      "ingredients": [
+        {
+          "name": "Cave Mushroom",
+          "quantity": 2
+        },
+        {
+          "name": "Cave Moss",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.cave_draught",
+      "template_id": "910110019",
+      "output": "Cave Draught",
+      "crafting": 25,
+      "foraging": 24,
+      "ingredients": [
+        {
+          "name": "Cave Mushroom",
+          "quantity": 2
+        },
+        {
+          "name": "Cave Moss",
+          "quantity": 2
+        },
+        {
+          "name": "Cave Paste",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.ghostcap_extract",
+      "template_id": "910110011",
+      "output": "Ghostcap Extract",
+      "crafting": 28,
+      "foraging": 30,
+      "ingredients": [
+        {
+          "name": "Ghostcap",
+          "quantity": 2
+        },
+        {
+          "name": "Cave Mushroom",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.starleaf_longbow",
+      "template_id": "910110012",
+      "output": "Starleaf Longbow",
+      "crafting": 29,
+      "foraging": 30,
+      "ingredients": [
+        {
+          "name": "Resin-Sealed Grip",
+          "quantity": 2
+        },
+        {
+          "name": "Woven Fiber Cord",
+          "quantity": 2
+        },
+        {
+          "name": "Starleaf Infusion",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.ghostcap_shiv",
+      "template_id": "910110013",
+      "output": "Ghostcap Shiv",
+      "crafting": 30,
+      "foraging": 30,
+      "ingredients": [
+        {
+          "name": "Resin-Sealed Grip",
+          "quantity": 1
+        },
+        {
+          "name": "Ghostcap Extract",
+          "quantity": 1
+        },
+        {
+          "name": "Cave Paste",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.starleaf_tonic",
+      "template_id": "910110020",
+      "output": "Starleaf Tonic",
+      "crafting": 31,
+      "foraging": 30,
+      "ingredients": [
+        {
+          "name": "Starleaf",
+          "quantity": 2
+        },
+        {
+          "name": "Sunpetal",
+          "quantity": 2
+        },
+        {
+          "name": "Starleaf Infusion",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.root_temper",
+      "template_id": "910110014",
+      "output": "Root Temper",
+      "crafting": 34,
+      "foraging": 36,
+      "ingredients": [
+        {
+          "name": "Blightroot",
+          "quantity": 2
+        },
+        {
+          "name": "Ironvine Root",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.blightroot_blade",
+      "template_id": "910110015",
+      "output": "Blightroot Blade",
+      "crafting": 36,
+      "foraging": 36,
+      "ingredients": [
+        {
+          "name": "Root Temper",
+          "quantity": 1
+        },
+        {
+          "name": "Resin-Sealed Grip",
+          "quantity": 1
+        },
+        {
+          "name": "Starleaf Infusion",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.rootbound_guard",
+      "template_id": "910110016",
+      "output": "Rootbound Guard",
+      "crafting": 38,
+      "foraging": 36,
+      "ingredients": [
+        {
+          "name": "Root Temper",
+          "quantity": 1
+        },
+        {
+          "name": "Woven Fiber Cord",
+          "quantity": 2
+        },
+        {
+          "name": "Resin Sprig",
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "key": "fr.rootward_provision",
+      "template_id": "910110021",
+      "output": "Rootward Provision",
+      "crafting": 49,
+      "foraging": 49,
+      "ingredients": [
+        {
+          "name": "Duskleaf",
+          "quantity": 1
+        },
+        {
+          "name": "Elder Resin",
+          "quantity": 1
+        },
+        {
+          "name": "Voidcap",
+          "quantity": 1
+        }
+      ]
+    }
+  ],
+  "station_authority": "native Smithing Template/Combine/DoSuccess; no invented Alchemy station",
+  "release_status": "source/current-assembly static verified; live ItemDB/world survey/build QA pending"
+}

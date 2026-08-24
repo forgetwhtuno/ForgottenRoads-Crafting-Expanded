@@ -15,6 +15,8 @@ namespace ErenshorCraftingExpanded
         internal GameObject Visual;
         internal GameObject WorldLabel;
         internal ForageNodeWorldLabelView LabelView;
+        internal GameObject Highlight;
+        internal ForageNodeHighlightView HighlightView;
         internal Renderer[] VisualRenderers;
         internal GameObject InteractionTarget;
         internal ForageNodeInteractionTarget InteractionComponent;
@@ -24,6 +26,7 @@ namespace ErenshorCraftingExpanded
         internal float CompletionFeedbackRemaining;
         internal bool CompletionFeedbackLogged;
         internal bool PresentationFailureLogged;
+        internal bool HighlightSelectionActive;
         internal bool IsDebugPlaceholder;
         internal bool IsAutoTrial;
         internal bool IsCoveredTrial;
@@ -55,16 +58,24 @@ namespace ErenshorCraftingExpanded
         private static SpawnedForageNode _targetedNode;
         private static readonly RaycastHit[] _targetRayHits = new RaycastHit[8];
         private static readonly RaycastHit[] _occlusionRayHits = new RaycastHit[12];
+        private static readonly HashSet<string> _visualFamilySuccessLogged = new HashSet<string>();
+        private static readonly HashSet<string> _visualFamilyFailureLogged = new HashSet<string>();
         private static string _lastEligibilityNodeId = string.Empty;
         private static ForageInteractionEligibility _lastEligibility = ForageInteractionEligibility.NoNode;
+        private static string _lastTargetInvariantKey = string.Empty;
+        private static float _lastTargetInvariantLogAt = -999f;
 
         private const float CompletionFeedbackSeconds = 0.15f;
+        private const float TargetInvariantLogCooldownSeconds = 5f;
         private const float GatherFeedbackCooldownSeconds = 0.75f;
+        private static readonly object _forageInputOwner = new object();
+        private static readonly ForageInteractionCaptureState _captureState = new ForageInteractionCaptureState();
         private static SpawnedForageNode _activeGatherNode;
         private static long _activeGatherToken;
         private static long _nextGatherToken;
-        private static Vector3 _activeGatherStartPosition;
         private static int _activeGatherStartHp = -1;
+        private static int _activeGatherLastHp = -1;
+        private static Vector3 _activeGatherStartPosition = Vector3.zero;
         private static string _activeGatherScene = string.Empty;
         private static string _activeGatherCharacterKey = string.Empty;
         private static string _activeRewardItemId = string.Empty;
@@ -72,6 +83,7 @@ namespace ErenshorCraftingExpanded
         private static float _activeRespawnSeconds;
         private static bool _activeGatherAnimationStarted;
         private static bool _activeNativeGrantInvokeStarted;
+        private static bool _activeGatherInputOwned;
         private static string _lastGatherFeedback = string.Empty;
         private static float _nextGatherFeedbackAt;
         // First vertical slice: when a scene has no curated authored forage entries, normal
@@ -95,6 +107,14 @@ namespace ErenshorCraftingExpanded
         internal static string LastGatherCancelReason = "none";
         internal static string LastGrantResult = "none";
         internal static string LastNameplateSummary = "nameplate=(none)";
+        internal static string LastTargetInvariantSummary = "targetInvariant=healthy";
+
+        internal static bool OwnsCapturedPointerInput
+        {
+            // Pointer/camera ownership lasts only through the initiating RMB press. The gather
+            // transaction remains captured after release so normal camera movement can resume.
+            get { return _activeGatherInputOwned; }
+        }
 
         static ForageNodeController()
         {
@@ -133,6 +153,7 @@ namespace ErenshorCraftingExpanded
             }
 
             string scene = SafeSceneName();
+            WorldThreatRuntime.Tick(scene, Time.unscaledTime);
             bool pocNodeEnabled = ForagingConfig.EnablePoCNode.Value;
             bool debugPlaceholderEnabled = ForagingConfig.AllowDebugPlaceholderVisual.Value;
             bool experimentalCoveredResources = ForagingConfig.ExperimentalCoveredResources != null && ForagingConfig.ExperimentalCoveredResources.Value;
@@ -148,7 +169,7 @@ namespace ErenshorCraftingExpanded
                 RespawnForScene(scene);
             }
 
-            if (IsAutoPlacementEnabledForScene(scene) &&
+            if (IsAutoPlacementEnabledForScene(scene) && WorldThreatRuntime.Ready &&
                 AutoTrialCount() == 0 && _autoTrialAttemptCount > 0 && _autoTrialAttemptCount < 5)
             {
                 _autoTrialRetrySeconds -= deltaSeconds;
@@ -161,71 +182,88 @@ namespace ErenshorCraftingExpanded
                 }
             }
 
-            foreach (SpawnedForageNode node in _spawned)
+            // A single destroyed/half-unloaded scene object must never abort the entire Crafting
+            // Update. Validate from the back so an invalid node can be retired without invalidating
+            // iteration, and contain presentation failures to that one node.
+            for (int i = _spawned.Count - 1; i >= 0; i--)
             {
-                if (node == null || node.State == null) continue;
-                node.State.Tick(deltaSeconds);
-                TickCompletionFeedback(node, deltaSeconds);
-                UpdateVisualForState(node);
-                UpdateDynamicGatherPresentation(node);
+                SpawnedForageNode node = _spawned[i];
+                string invariantReason;
+                if (!EnsureNodeRuntimeIntegrity(node, out invariantReason))
+                {
+                    RetireSpawnedNodeAt(i, invariantReason);
+                    continue;
+                }
+                try
+                {
+                    node.State.Tick(deltaSeconds);
+                    TickCompletionFeedback(node, deltaSeconds);
+                    UpdateVisualForState(node);
+                    UpdateDynamicGatherPresentation(node);
+                }
+                catch (System.Exception ex)
+                {
+                    RetireSpawnedNodeAt(i, "node-tick-" + ex.GetType().Name);
+                }
             }
 
             // Guard evaluation deliberately runs after elapsed time advances but before the node is
-            // allowed into GrantPending. A movement/damage/range cancellation on the exact duration
-            // boundary therefore wins and can never race a reward grant.
+            // allowed into GrantPending. Movement/damage/player-state/range/LOS cancellation on the
+            // exact duration boundary therefore wins and can never race a reward grant.
             TickActiveGather();
             UpdateTargetedNode();
         }
 
-        internal static bool TryHandleNativeLeftClick()
+        internal static bool TryHandleNativeRightClick()
         {
-            // Return true only when this click belongs to a forage resource (or is the deliberate
-            // different-resource cancellation click). UI-owned clicks always pass through.
-            if (!ForagingConfig.EnableForaging.Value) return false;
-            if (IsPointerOwnedByUi()) return false;
+            // PlayerControl.RightClick is the current native world-RMB boundary. This prefix
+            // independently respects real UI/chat ownership because it executes before native
+            // RightClick's own EventSystem guard.
+            if (ForagingConfig.EnableForaging == null || !ForagingConfig.EnableForaging.Value) return false;
 
             bool typing = IsChatFocused();
+            if (IsPointerOwnedByUi())
+            {
+                if (_activeGatherNode != null) CancelActiveGather(ForageGatherCancelReason.UiOwned);
+                return false;
+            }
+            if (typing)
+            {
+                if (_activeGatherNode != null) CancelActiveGather(ForageGatherCancelReason.Typing);
+                return false;
+            }
+
+            SpawnedForageNode selected;
+            float pointerRayDistance;
+            bool pointsAtForage = TryResolvePointerTarget(out selected, out pointerRayDistance) && selected != null;
+
             if (_activeGatherNode != null)
             {
-                SpawnedForageNode activeClicked = null;
-                float activePointerDistance;
-                bool hitForageNode = !typing &&
-                    TryResolvePointerTarget(out activeClicked, out activePointerDistance) &&
-                    activeClicked != null;
-                ForageActiveGatherClickAction action = ForageActiveGatherClickPolicy.Evaluate(
-                    typing,
-                    hitForageNode,
-                    hitForageNode && activeClicked == _activeGatherNode);
-
-                if (action == ForageActiveGatherClickAction.CancelTypingPassThrough)
+                ForageActiveGatherClickAction activeAction = ForageActiveGatherClickPolicy.Evaluate(
+                    false, IsConflictingUiDuringCapturedGather(), pointsAtForage);
+                if (activeAction == ForageActiveGatherClickAction.CancelUiPassThrough)
+                {
+                    CancelActiveGather(ForageGatherCancelReason.UiOwned);
+                    return false;
+                }
+                if (activeAction == ForageActiveGatherClickAction.CancelTypingPassThrough)
                 {
                     CancelActiveGather(ForageGatherCancelReason.Typing);
                     return false;
                 }
-                if (action == ForageActiveGatherClickAction.IgnoreSameNodeConsume)
+                if (activeAction == ForageActiveGatherClickAction.CancelWorldPassThrough)
                 {
-                    LastGatherTransactionSummary = "gather=active node=" + SafeNodeId(_activeGatherNode) +
-                        " token=" + _activeGatherToken.ToString() + " repeat-click=ignored";
-                    return true;
-                }
-                if (action == ForageActiveGatherClickAction.CancelDifferentNodeConsume)
-                {
-                    CancelActiveGather(ForageGatherCancelReason.DifferentNodeClick);
-                    // The same click must not chain directly into the new herb.
-                    return true;
+                    CancelActiveGather(ForageGatherCancelReason.WorldInteraction);
+                    return false;
                 }
 
-                // Ordinary world clicks remain native/failure-open and do not cancel the gather.
-                // This is important for Standard-control camera gestures: camera orbit must remain
-                // usable while deterministic movement/range/LOS/damage guards own cancellation.
-                return false;
+                LastGatherTransactionSummary = "gather=active node=" + SafeNodeId(_activeGatherNode) +
+                    " token=" + _activeGatherToken.ToString() + " duplicate-forage-rmb=consumed";
+                return true;
             }
 
-            if (typing) return false;
-
-            SpawnedForageNode selected;
-            float pointerRayDistance;
-            if (!TryResolvePointerTarget(out selected, out pointerRayDistance) || selected == null) return false;
+            // Non-forage RMB is never consumed by Crafting.
+            if (!pointsAtForage) return false;
 
             float interactionRange = ForagingConfig.InteractionRange.Value;
             if (!ForagingRuntimeConfigValidation.IsValidInteractionRange(interactionRange))
@@ -260,6 +298,7 @@ namespace ErenshorCraftingExpanded
                 requiredSkill);
 
             _targetedNode = selected;
+            _captureState.SetHoverCandidate(SafeNodeId(selected));
             RecordEligibility(selected, playerDistance, eligibility);
             LastTargetSummary = "target=" + SafeNodeId(selected) +
                 " name={" + SafeDisplayName(selected) + "}" +
@@ -275,7 +314,20 @@ namespace ErenshorCraftingExpanded
                      eligibility.Eligibility == ForageInteractionEligibility.ProgressionUnavailable))
                     ForagingProgressionController.NotifyRequirement(selectedResource);
                 else if (eligibility.Eligibility == ForageInteractionEligibility.OutOfRange)
+                {
                     NotifyGatherFeedback("Out of range.");
+                    // Preserve native RMB when the enlarged interaction volume is not actually
+                    // usable; this avoids stealing a nearby NPC/world interaction.
+                    return false;
+                }
+                return true;
+            }
+
+            if (IsGatherLineOfSightBlocked(selected, playerPos))
+            {
+                LastFailureReason = "A world obstruction blocks this forage resource.";
+                LastGatherTransactionSummary = "attempt=rejected node=" + SafeNodeId(selected) + " reason=true-los-blocked";
+                NotifyGatherFeedback("Something blocks the resource.");
                 return true;
             }
 
@@ -293,6 +345,14 @@ namespace ErenshorCraftingExpanded
                 return true;
             }
 
+            if (!CraftingCameraUiOwnershipPatch.IsInstalled)
+            {
+                LastFailureReason = "Verified camera/input ownership is unavailable for this game build.";
+                LastGatherTransactionSummary = "attempt=rejected node=" + SafeNodeId(selected) + " reason=input-ownership-unavailable";
+                NotifyGatherFeedback("Foraging input ownership is unavailable.");
+                return true;
+            }
+
             BeginGather(selected, playerPos, selectedResource);
             return true;
         }
@@ -303,6 +363,38 @@ namespace ErenshorCraftingExpanded
             if (now < _nextTargetProbe) return;
             _nextTargetProbe = now + ForageInteractionPolicy.TargetProbeIntervalSeconds;
 
+            // Selected/Gathering owns an exact node identity. Hover rays are no longer
+            // transaction authority until that captured channel has terminated.
+            if (_activeGatherNode != null && _captureState.IsCaptured(_activeGatherToken))
+            {
+                SpawnedForageNode captured = _activeGatherNode;
+                if (IsRegisteredLiveTarget(captured))
+                {
+                    SpawnedForageNode previousCapturedTarget = _targetedNode;
+                    if (previousCapturedTarget != captured) SetNodeInteractionStateSafe(previousCapturedTarget, false, false);
+                    _targetedNode = captured;
+                    SetNodeInteractionStateSafe(captured, true, true);
+                    LastTargetSummary = "target=" + SafeNodeId(captured) + " capture=locked";
+                    MarkTargetInvariantHealthy();
+                    return;
+                }
+            }
+
+            // Title/loading/scene teardown normally has no live forage nodes. Do not probe a camera
+            // (or emit camera-unavailable diagnostics) until there is actually a node to target.
+            if (_spawned.Count == 0)
+            {
+                SetNodeInteractionStateSafe(_targetedNode, false, false);
+                _targetedNode = null;
+                _captureState.SetHoverCandidate(string.Empty);
+                LastTargetSummary = "target=(none)";
+                _lastEligibilityNodeId = string.Empty;
+                _lastEligibility = ForageInteractionEligibility.NoNode;
+                LastEligibilitySummary = "node=(none) state=NoNode reason={No forage resource under pointer.}";
+                MarkTargetInvariantHealthy();
+                return;
+            }
+
             SpawnedForageNode previous = _targetedNode;
             SpawnedForageNode next;
             float hitDistance;
@@ -312,8 +404,17 @@ namespace ErenshorCraftingExpanded
                 hitDistance = float.PositiveInfinity;
             }
 
+            if (next != null && !IsRegisteredLiveTarget(next))
+            {
+                RecordTargetInvariantFailure("resolved-target-not-live", next);
+                next = null;
+                hitDistance = float.PositiveInfinity;
+            }
+
             bool targetChanged = previous != next;
+            if (targetChanged) SetNodeInteractionStateSafe(previous, false, false);
             _targetedNode = next;
+            _captureState.SetHoverCandidate(next == null ? string.Empty : SafeNodeId(next));
             if (next == null)
             {
                 LastTargetSummary = "target=(none)";
@@ -339,14 +440,14 @@ namespace ErenshorCraftingExpanded
                 ForagingProgressionController.IsReady,
                 ForagingProgressionController.CurrentLevel,
                 resource == null ? 1 : resource.MinimumSkill);
-            if (targetChanged)
-            {
-                LastTargetSummary = "target=" + SafeNodeId(next) +
-                    " name={" + SafeDisplayName(next) + "}" +
-                    " pointerRay=" + (float.IsInfinity(hitDistance) ? "?" : hitDistance.ToString("F2") + "m") +
-                    " player=" + (float.IsInfinity(playerDistance) ? "?" : playerDistance.ToString("F2") + "m");
-            }
+            LastTargetSummary = "target=" + SafeNodeId(next) +
+                " name={" + SafeDisplayName(next) + "}" +
+                " pointerRay=" + (float.IsInfinity(hitDistance) ? "?" : hitDistance.ToString("F2") + "m") +
+                " player=" + (float.IsInfinity(playerDistance) ? "?" : playerDistance.ToString("F2") + "m");
+            if (targetChanged) CraftingController.LogInfo("Foraging forage_hover_acquired node=" + SafeNodeId(next));
+            SetNodeInteractionStateSafe(next, true, evaluation.CanGather);
             RecordEligibility(next, playerDistance, evaluation);
+            MarkTargetInvariantHealthy();
         }
 
         private static bool TryResolvePointerTarget(out SpawnedForageNode node, out float hitDistance)
@@ -356,15 +457,34 @@ namespace ErenshorCraftingExpanded
             try
             {
                 Camera camera = ResolveInteractionCamera(Time.unscaledTime);
-                if (camera == null) return false;
+                if (camera == null)
+                {
+                    RecordTargetInvariantFailure("camera-unavailable", null);
+                    return false;
+                }
                 Ray ray = camera.ScreenPointToRay(Input.mousePosition);
                 int mask = 1 << 2; // Dedicated Ignore Raycast layer, explicitly queried only by this mod.
                 int hitCount = Physics.RaycastNonAlloc(ray, _targetRayHits, ForageInteractionPolicy.TargetProbeDistance, mask, QueryTriggerInteraction.Collide);
                 for (int i = 0; i < hitCount; i++)
                 {
                     RaycastHit hit = _targetRayHits[i];
-                    ForageNodeInteractionTarget target = hit.collider == null ? null : hit.collider.GetComponent<ForageNodeInteractionTarget>();
-                    if (target == null || target.Node == null || hit.distance >= hitDistance) continue;
+                    Collider hitCollider = hit.collider;
+                    if (hitCollider == null) continue;
+                    ForageNodeInteractionTarget target = null;
+                    try { target = hitCollider.GetComponent<ForageNodeInteractionTarget>(); }
+                    catch (System.Exception ex)
+                    {
+                        RecordTargetInvariantFailure("target-component-" + ex.GetType().Name, null);
+                        continue;
+                    }
+                    if (target == null || target.Node == null || !IsRegisteredLiveTarget(target.Node))
+                    {
+                        if (target != null) RecordTargetInvariantFailure("stale-interaction-target", target.Node);
+                        continue;
+                    }
+                    string candidateId = SafeNodeId(target.Node);
+                    string selectedId = node == null ? string.Empty : SafeNodeId(node);
+                    if (!ForageInteractionPolicy.ShouldPreferPointerHit(hit.distance, candidateId, hitDistance, selectedId)) continue;
                     node = target.Node;
                     hitDistance = hit.distance;
                 }
@@ -389,6 +509,11 @@ namespace ErenshorCraftingExpanded
                             (blockerCollider.transform == playerTransform || blockerCollider.transform.IsChildOf(playerTransform));
                     }
                     catch { localPlayer = false; }
+                    // A cloned native forage visual can carry its own ordinary collider. That
+                    // collider sits in front of our enlarged Ignore-RayCast interaction target and
+                    // must not make the node occlude itself. Only unrelated world geometry should
+                    // cancel pointer ownership here.
+                    if (IsColliderOwnedByNodeVisual(node, blockerCollider)) continue;
                     if (ForageInteractionPolicy.IsSolidOcclusion(hitDistance, blocker.distance, localPlayer))
                     {
                         node = null;
@@ -398,8 +523,9 @@ namespace ErenshorCraftingExpanded
                 }
                 return true;
             }
-            catch
+            catch (System.Exception ex)
             {
+                RecordTargetInvariantFailure("pointer-probe-" + ex.GetType().Name, node);
                 node = null;
                 hitDistance = float.PositiveInfinity;
                 return false;
@@ -419,6 +545,7 @@ namespace ErenshorCraftingExpanded
 
         private static bool IsPointerOwnedByUi()
         {
+            try { if (CraftingUiPointerOwnership.HasOwners) return true; } catch { }
             try
             {
                 if (GameData.DraggingUIElement) return true;
@@ -431,6 +558,240 @@ namespace ErenshorCraftingExpanded
             }
             catch { }
             return false;
+        }
+
+        private static bool IsConflictingUiDuringCapturedGather()
+        {
+            // Do not treat this gather's own DraggingUIElement/UsingUI promotion as foreign UI.
+            // A second retained-Crafting owner, a real EventSystem hit, or the raw native UsingUI
+            // answer is a genuine competing owner and cancels the captured gesture.
+            try { if (CraftingUiPointerOwnership.HasOtherOwners(_forageInputOwner)) return true; } catch { }
+            try
+            {
+                EventSystem eventSystem = EventSystem.current;
+                if (eventSystem != null && eventSystem.IsPointerOverGameObject()) return true;
+            }
+            catch { }
+            try { if (CraftingCameraUiOwnershipPatch.NativeUiRecentlyActive(Time.unscaledTime)) return true; } catch { }
+            return false;
+        }
+
+        private static bool AcquireActiveGatherInputOwnership()
+        {
+            if (_activeGatherInputOwned) return true;
+            if (!CraftingCameraUiOwnershipPatch.IsInstalled) return false;
+            try
+            {
+                CraftingUiPointerOwnership.Acquire(_forageInputOwner);
+                _activeGatherInputOwned = CraftingUiPointerOwnership.HasOwner(_forageInputOwner);
+            }
+            catch
+            {
+                _activeGatherInputOwned = false;
+            }
+            if (_activeGatherInputOwned)
+                CraftingController.LogInfo("Foraging forage_input_owned node=" + SafeNodeId(_activeGatherNode) +
+                    " token=" + _activeGatherToken.ToString());
+            return _activeGatherInputOwned;
+        }
+
+        private static void ReleaseActiveGatherInputOwnership(string terminal)
+        {
+            bool owned = _activeGatherInputOwned;
+            try { owned = owned || CraftingUiPointerOwnership.HasOwner(_forageInputOwner); } catch { }
+            _activeGatherInputOwned = false;
+            if (!owned) return;
+            try { CraftingUiPointerOwnership.Release(_forageInputOwner); } catch { }
+            CraftingController.LogInfo("Foraging forage_input_released node=" + SafeNodeId(_activeGatherNode) +
+                " token=" + _activeGatherToken.ToString() + " terminal=" + (terminal ?? "unknown"));
+        }
+
+        private static void ReleaseCapturedInteraction(string terminal)
+        {
+            bool hadCapture = _activeGatherInputOwned ||
+                _captureState.Phase == ForageInteractionCapturePhase.Selected ||
+                _captureState.Phase == ForageInteractionCapturePhase.Gathering ||
+                _captureState.Phase == ForageInteractionCapturePhase.Completing ||
+                _captureState.Phase == ForageInteractionCapturePhase.Cancelled;
+            if (!hadCapture) return;
+
+            string nodeId = SafeNodeId(_activeGatherNode);
+            long token = _activeGatherToken;
+            ReleaseActiveGatherInputOwnership(terminal);
+            _captureState.Release(terminal);
+            CraftingController.LogInfo("Foraging forage_capture_release node=" + nodeId +
+                " token=" + token.ToString() + " terminal=" + (terminal ?? "unknown"));
+        }
+
+        private static bool IsSelectingRightButtonHeld()
+        {
+            try { return Input.GetMouseButton(1); }
+            catch { return false; }
+        }
+
+        private static bool EnsureNodeRuntimeIntegrity(SpawnedForageNode node, out string reason)
+        {
+            reason = string.Empty;
+            bool visualAlive = false;
+            bool targetAlive = false;
+            bool componentAlive = false;
+            bool colliderAlive = false;
+            bool labelAlive = false;
+            bool highlightAlive = false;
+            string visualIntegrity;
+            Bounds ignoredVisualBounds;
+            try { visualAlive = node != null && node.Visual != null && TryAuditProductionVisual(node.Visual, node.IsAutoTrial, out ignoredVisualBounds, out visualIntegrity); } catch { visualAlive = false; }
+            try { targetAlive = node != null && node.InteractionTarget != null; } catch { targetAlive = false; }
+            try { componentAlive = node != null && node.InteractionComponent != null; } catch { componentAlive = false; }
+            try { colliderAlive = componentAlive && node.InteractionComponent.HitCollider != null; } catch { colliderAlive = false; }
+            try { labelAlive = node != null && node.WorldLabel != null && node.LabelView != null; } catch { labelAlive = false; }
+            try { highlightAlive = node != null && (node.Highlight == null || node.HighlightView != null); } catch { highlightAlive = false; }
+
+            ForageNodeLifecycleAction action = ForageTargetLifecyclePolicy.Evaluate(
+                node != null,
+                node != null && node.Definition != null,
+                node != null && node.State != null,
+                visualAlive,
+                targetAlive,
+                componentAlive,
+                colliderAlive,
+                labelAlive,
+                highlightAlive);
+            if (action == ForageNodeLifecycleAction.Healthy) return true;
+            if (action == ForageNodeLifecycleAction.RetireNode)
+            {
+                reason = !visualAlive ? "visual-invalid-or-destroyed" : "core-state-invalid";
+                return false;
+            }
+
+            // The interaction target is entirely mod-owned and query-only, so it is safe to rebuild
+            // after a destroyed collider/component without touching the visual/resource state.
+            try
+            {
+                if (node.InteractionTarget != null) UnityEngine.Object.Destroy(node.InteractionTarget);
+            }
+            catch { }
+            try
+            {
+                if (node.Highlight != null) UnityEngine.Object.Destroy(node.Highlight);
+            }
+            catch { }
+            node.InteractionTarget = null;
+            node.InteractionComponent = null;
+            node.Highlight = null;
+            node.HighlightView = null;
+            node.PresentationInitialized = false;
+            Bounds repairedBounds;
+            string repairedVisualReason;
+            if (!TryAuditProductionVisual(node.Visual, node.IsAutoTrial, out repairedBounds, out repairedVisualReason) ||
+                !AttachInteractionTarget(node, repairedBounds))
+            {
+                reason = "interaction-target-rebuild-visual-invalid:" + repairedVisualReason;
+                return false;
+            }
+            try
+            {
+                if (node.InteractionTarget != null && node.InteractionComponent != null && node.InteractionComponent.HitCollider != null)
+                {
+                    RecordTargetInvariantFailure("interaction-target-rebuilt", node);
+                    return true;
+                }
+            }
+            catch { }
+            reason = "interaction-target-rebuild-failed";
+            return false;
+        }
+
+        private static bool IsRegisteredLiveTarget(SpawnedForageNode node)
+        {
+            if (node == null || node.Definition == null || node.State == null) return false;
+            try
+            {
+                return _spawned.Contains(node) &&
+                    node.Visual != null &&
+                    node.InteractionTarget != null &&
+                    node.InteractionComponent != null &&
+                    node.InteractionComponent.HitCollider != null &&
+                    node.InteractionComponent.HitCollider.enabled;
+            }
+            catch { return false; }
+        }
+
+        private static void SetNodeInteractionStateSafe(SpawnedForageNode node, bool targeted, bool ready)
+        {
+            if (node == null) return;
+            bool selected = node == _activeGatherNode && _captureState.IsCaptured(_activeGatherToken);
+            try
+            {
+                if (node.HighlightView != null) node.HighlightView.SetInteractionState(targeted, selected, ready);
+                if (node.HighlightSelectionActive != selected)
+                {
+                    node.HighlightSelectionActive = selected;
+                    CraftingController.LogInfo("Foraging forage_highlight_" + (selected ? "on" : "off") +
+                        " node=" + SafeNodeId(node));
+                }
+            }
+            catch (System.Exception ex)
+            {
+                RecordTargetInvariantFailure("highlight-" + ex.GetType().Name, node);
+            }
+            try { if (node.LabelView != null) node.LabelView.SetInteractionState(targeted || selected, ready && selected); }
+            catch (System.Exception ex)
+            {
+                RecordTargetInvariantFailure("label-state-" + ex.GetType().Name, node);
+            }
+        }
+
+        private static void RetireSpawnedNodeAt(int index, string reason)
+        {
+            if (index < 0 || index >= _spawned.Count) return;
+            SpawnedForageNode node = _spawned[index];
+            if (_activeGatherNode == node) CancelActiveGather(ForageGatherCancelReason.TargetInvalid);
+            if (_targetedNode == node)
+            {
+                SetNodeInteractionStateSafe(node, false, false);
+                _targetedNode = null;
+                LastTargetSummary = "target=(none)";
+            }
+            RecordTargetInvariantFailure("node-retired-" + (reason ?? "invalid"), node);
+            DestroyNodeOwnedObjects(node);
+            _spawned.RemoveAt(index);
+        }
+
+        private static void DestroyNodeOwnedObjects(SpawnedForageNode node)
+        {
+            if (node == null) return;
+            try { if (node.WorldLabel != null) UnityEngine.Object.Destroy(node.WorldLabel); } catch { }
+            try { if (node.InteractionTarget != null) UnityEngine.Object.Destroy(node.InteractionTarget); } catch { }
+            try { if (node.Highlight != null) UnityEngine.Object.Destroy(node.Highlight); } catch { }
+            try { if (node.Visual != null) UnityEngine.Object.Destroy(node.Visual); } catch { }
+            node.WorldLabel = null;
+            node.LabelView = null;
+            node.InteractionTarget = null;
+            node.InteractionComponent = null;
+            node.Highlight = null;
+            node.HighlightView = null;
+            node.Visual = null;
+            node.VisualRenderers = null;
+        }
+
+        private static void RecordTargetInvariantFailure(string reason, SpawnedForageNode node)
+        {
+            string key = (reason ?? "unknown") + ":" + SafeNodeId(node);
+            LastTargetInvariantSummary = "targetInvariant=" + (reason ?? "unknown") + " node=" + SafeNodeId(node);
+            float now;
+            try { now = Time.unscaledTime; } catch { now = _lastTargetInvariantLogAt + TargetInvariantLogCooldownSeconds; }
+            if (string.Equals(_lastTargetInvariantKey, key, System.StringComparison.Ordinal) &&
+                now < _lastTargetInvariantLogAt + TargetInvariantLogCooldownSeconds)
+                return;
+            _lastTargetInvariantKey = key;
+            _lastTargetInvariantLogAt = now;
+            CraftingController.LogInfo("Foraging target_invariant " + LastTargetInvariantSummary);
+        }
+
+        private static void MarkTargetInvariantHealthy()
+        {
+            LastTargetInvariantSummary = "targetInvariant=healthy";
         }
 
         private static void RecordEligibility(SpawnedForageNode node, float distance, ForageInteractionEvaluation evaluation)
@@ -496,17 +857,19 @@ namespace ErenshorCraftingExpanded
             float duration = ForagingRuntimeConfigValidation.NormalizeGatherDuration(configuredDuration);
             float effectiveRespawn = EffectiveRespawnSeconds(node);
             long token = NextGatherToken();
-            if (!node.State.TryBeginGather(token, duration))
+
+            if (!_captureState.TrySelect(nodeId, token))
             {
-                LastFailureReason = "Resource is already being gathered or depleted.";
-                LastGatherTransactionSummary = "gather=rejected node=" + nodeId + " reason=state-transition";
+                LastFailureReason = "Another forage interaction is already selected.";
+                LastGatherTransactionSummary = "gather=rejected node=" + nodeId + " reason=selection-state";
                 return;
             }
 
             _activeGatherNode = node;
             _activeGatherToken = token;
-            _activeGatherStartPosition = playerPos;
             _activeGatherStartHp = startHp;
+            _activeGatherLastHp = startHp;
+            _activeGatherStartPosition = playerPos;
             _activeGatherScene = SafeSceneName();
             _activeGatherCharacterKey = characterKey;
             _activeRewardItemId = node.Definition.RewardItemId ?? string.Empty;
@@ -514,6 +877,7 @@ namespace ErenshorCraftingExpanded
             _activeRespawnSeconds = effectiveRespawn;
             _activeGatherAnimationStarted = false;
             _activeNativeGrantInvokeStarted = false;
+            _activeGatherInputOwned = false;
             LastGatherCancelReason = "none";
             LastGrantResult = "none";
             LastFailureReason = string.Empty;
@@ -521,22 +885,58 @@ namespace ErenshorCraftingExpanded
             node.CompletionFeedbackLogged = false;
             node.PresentationFailureLogged = false;
 
+            SetNodeInteractionStateSafe(node, true, true);
+            CraftingController.LogInfo("Foraging forage_selected node=" + nodeId + " token=" + token.ToString());
+
+            // Own only the initiating RMB press so CameraController cannot treat the selecting
+            // click as orbit input. Ownership is released as soon as RMB is physically released;
+            // the transaction continues independently and camera movement is then allowed.
+            if (!AcquireActiveGatherInputOwnership())
+            {
+                _captureState.MarkCancelled(token, "input-ownership-unavailable");
+                _captureState.Release("input-ownership-unavailable");
+                LastFailureReason = "Verified camera/input ownership could not be acquired.";
+                LastGatherCancelReason = ForageGatherCancellationPolicy.Describe(ForageGatherCancelReason.InputOwnershipUnavailable);
+                LastGatherTransactionSummary = "gather=rejected node=" + nodeId +
+                    " token=" + token.ToString() + " reason=" + LastGatherCancelReason;
+                NotifyGatherFeedback("Foraging input ownership is unavailable.");
+                ClearActiveGatherSnapshot();
+                return;
+            }
+
+            if (!node.State.TryBeginGather(token, duration) || !_captureState.TryBeginGathering(token))
+            {
+                try { node.State.CancelGather(token); } catch { }
+                _captureState.MarkCancelled(token, "state-transition");
+                LastFailureReason = "Resource is already being gathered or depleted.";
+                LastGatherCancelReason = "node-invalid";
+                LastGatherTransactionSummary = "gather=rejected node=" + nodeId + " reason=state-transition";
+                ReleaseCapturedInteraction("state-transition");
+                ClearActiveGatherSnapshot();
+                return;
+            }
+
             bool animationRequested = ForagingConfig.UseNativeGatherAnimation != null && ForagingConfig.UseNativeGatherAnimation.Value;
             bool animationStarted = false;
             if (animationRequested)
             {
-                // Once an animation start was attempted, always issue EndLoot on every terminal path
-                // even if the start adapter reports failure after touching Animator state.
                 _activeGatherAnimationStarted = true;
                 animationStarted = GameForagingApi.TryStartNativeGatherAnimation();
             }
 
             UpdateVisualForState(node);
+            SetNodeInteractionStateSafe(node, true, true);
             UpdateDynamicGatherPresentation(node);
             LastGatherTransactionSummary = "gather=Gathering node=" + nodeId +
                 " token=" + token.ToString() +
                 " elapsed=0.00 duration=" + duration.ToString("F2") +
+                " capture=channel input=rmb-edge-owned" +
                 " animation=" + (animationRequested ? (animationStarted ? "started" : "requested-unavailable") : "off");
+            CraftingController.LogInfo("Foraging forage_capture_begin node=" + nodeId +
+                " token=" + token.ToString() + " duration=" + duration.ToString("F2"));
+            CraftingController.LogInfo("Foraging forage_gather_begin node=" + nodeId +
+                " token=" + token.ToString() + " duration=" + duration.ToString("F2"));
+            // Preserve the established diagnostic token used by existing live-log tooling.
             CraftingController.LogInfo("Foraging gather_begin node=" + nodeId +
                 " token=" + token.ToString() + " duration=" + duration.ToString("F2"));
         }
@@ -545,10 +945,44 @@ namespace ErenshorCraftingExpanded
         {
             SpawnedForageNode node = _activeGatherNode;
             if (node == null) return;
-            if (node.State == null || !node.State.IsTokenActive(_activeGatherToken))
+            if (node.State == null || !node.State.IsTokenActive(_activeGatherToken) ||
+                !_captureState.IsGathering(_activeGatherToken))
             {
-                CancelActiveGather(ForageGatherCancelReason.CharacterChanged);
+                CancelActiveGather(ForageGatherCancelReason.TargetInvalid);
                 return;
+            }
+            if (!IsRegisteredLiveTarget(node))
+            {
+                CancelActiveGather(ForageGatherCancelReason.TargetInvalid);
+                return;
+            }
+
+            if (IsChatFocused())
+            {
+                CancelActiveGather(ForageGatherCancelReason.Typing);
+                return;
+            }
+
+            ForageGatherCancelReason uiCancel = ForageGatherChannelPolicy.EvaluateUi(
+                IsConflictingUiDuringCapturedGather());
+            if (uiCancel != ForageGatherCancelReason.None)
+            {
+                CancelActiveGather(uiCancel);
+                return;
+            }
+
+            // The selecting RMB only owns camera input until the physical click is released. The
+            // channel itself does not depend on the button and camera movement after release is safe.
+            if (_activeGatherInputOwned)
+            {
+                if (IsSelectingRightButtonHeld())
+                {
+                    try { CraftingUiPointerOwnership.Reassert(); } catch { }
+                }
+                else
+                {
+                    ReleaseActiveGatherInputOwnership("right-click-release");
+                }
             }
 
             Vector3 playerPos;
@@ -560,37 +994,45 @@ namespace ErenshorCraftingExpanded
 
             int currentHp;
             if (!GameForagingApi.TryGetPlayerCurrentHp(out currentHp)) currentHp = -1;
+
             bool localAggro;
             string localAggroDetail;
             bool localAggroKnown = GameForagingApi.TryGetLocalHostileAggro(out localAggro, out localAggroDetail);
             if (!ForageCombatEligibilityPolicy.CanBeginOrContinue(localAggroKnown, localAggro))
             {
                 LastGatherTransactionSummary = "gather_cancel node=" + SafeNodeId(node) +
-                    " reason=local-hostile-aggro probe=" + localAggroDetail;
+                    " reason=hostile-engaged probe=" + localAggroDetail;
                 CancelActiveGather(ForageGatherCancelReason.LocalHostileAggro);
                 return;
             }
+
             string currentScene = SafeSceneName();
             string currentCharacterKey = ForagingProgressionController.CurrentCharacterKey;
             bool zoneChanged = !string.Equals(currentScene, _activeGatherScene, System.StringComparison.OrdinalIgnoreCase);
             bool characterChanged = string.IsNullOrEmpty(currentCharacterKey) ||
                 !string.Equals(currentCharacterKey, _activeGatherCharacterKey, System.StringComparison.Ordinal);
+            bool targetValid = IsRegisteredLiveTarget(node) &&
+                node.Visual != null &&
+                node.State != null &&
+                (node.State.Availability == ForageAvailability.Gathering ||
+                 node.State.Availability == ForageAvailability.GrantPending);
+            bool meaningfulMovement = ForageGatherChannelPolicy.HasMeaningfulMovement(
+                _activeGatherStartPosition.x, _activeGatherStartPosition.y, _activeGatherStartPosition.z,
+                playerPos.x, playerPos.y, playerPos.z);
             float nodeDistance = node.Visual == null ? float.PositiveInfinity : Vector3.Distance(playerPos, node.Visual.transform.position);
             float interactionRange = ForagingConfig.InteractionRange == null ? 0f : ForagingConfig.InteractionRange.Value;
             bool occluded = IsGatherLineOfSightBlocked(node, playerPos);
-            Vector3 delta = playerPos - _activeGatherStartPosition;
             ForageGatherCancelReason cancel = ForageGatherCancellationPolicy.EvaluateFrame(
                 ForagingConfig.EnableForaging != null && ForagingConfig.EnableForaging.Value,
-                IsChatFocused(),
+                false,
                 zoneChanged,
                 characterChanged,
-                delta.x,
-                delta.y,
-                delta.z,
+                targetValid,
+                meaningfulMovement,
                 nodeDistance,
                 interactionRange,
                 occluded,
-                _activeGatherStartHp,
+                _activeGatherLastHp,
                 currentHp);
             if (cancel != ForageGatherCancelReason.None)
             {
@@ -598,18 +1040,22 @@ namespace ErenshorCraftingExpanded
                 return;
             }
 
+            // Healing raises the comparison baseline; zero/no change does not. A later actual
+            // decrease from that most-recent observed HP therefore cancels even after a heal.
+            if (currentHp >= 0) _activeGatherLastHp = currentHp;
+
             if (node.State.IsGatherReady(_activeGatherToken))
             {
-                if (!node.State.TryEnterGrantPending(_activeGatherToken))
+                if (!_captureState.TryBeginCompleting(_activeGatherToken) ||
+                    !node.State.TryEnterGrantPending(_activeGatherToken))
                 {
-                    CancelActiveGather(ForageGatherCancelReason.CharacterChanged);
+                    CancelActiveGather(ForageGatherCancelReason.TargetInvalid);
                     return;
                 }
                 UpdateDynamicGatherPresentation(node);
                 CompleteActiveGatherGrant();
                 return;
             }
-
         }
 
         private static void CompleteActiveGatherGrant()
@@ -651,6 +1097,7 @@ namespace ErenshorCraftingExpanded
                 CraftingController.LogError("Foraging gather transaction exception node=" + SafeNodeId(node) +
                     " token=" + token.ToString() + " type=" + ex.GetType().Name +
                     " nativeInvoke=" + (failClosed ? "started" : "no") + " retry=" + (failClosed ? "fail-closed" : "available"));
+                ReleaseCapturedInteraction("grant-exception");
                 ClearActiveGatherSnapshot();
             }
         }
@@ -690,6 +1137,7 @@ namespace ErenshorCraftingExpanded
                     if (node.State.Availability == ForageAvailability.GrantPending)
                         node.State.FailClosedUnknownAfterInvoke(token, _activeRespawnSeconds);
                     EndActiveGatherAnimation();
+                    ReleaseCapturedInteraction("grant-success-local-transition-failed");
                     ClearActiveGatherSnapshot();
                     CraftingController.LogError("Foraging grant_success but local depletion transition failed; node kept fail-closed.");
                     return;
@@ -739,6 +1187,11 @@ namespace ErenshorCraftingExpanded
                 CraftingController.LogInfo("Foraging grant_success node=" + nodeId + " token=" + token.ToString());
                 CraftingController.LogInfo("Foraging xp_commit " + (xpCommitted ? "yes" : "no") +
                     " depletion_commit " + (depletionCommitted ? "yes" : "no"));
+                CraftingController.LogInfo("Foraging forage_capture_complete node=" + nodeId +
+                    " token=" + token.ToString());
+                CraftingController.LogInfo("Foraging forage_gather_complete node=" + nodeId +
+                    " token=" + token.ToString());
+                ReleaseCapturedInteraction("complete");
                 ClearActiveGatherSnapshot();
                 return;
             }
@@ -762,6 +1215,7 @@ namespace ErenshorCraftingExpanded
                     NotifyGatherFeedback("Make room in your inventory to gather this resource.");
                 else
                     NotifyGatherFeedback("This resource cannot be gathered right now.");
+                ReleaseCapturedInteraction("grant-" + resultName);
                 ClearActiveGatherSnapshot();
                 return;
             }
@@ -781,6 +1235,7 @@ namespace ErenshorCraftingExpanded
             CraftingController.LogError("Foraging grant_unknown node=" + nodeId + " token=" + token.ToString() +
                 " xp_commit=no depletion_commit=no retry=fail-closed");
             NotifyGatherFeedback("Gather result could not be verified; this resource will recover later.");
+            ReleaseCapturedInteraction("grant-unknown");
             ClearActiveGatherSnapshot();
         }
 
@@ -788,8 +1243,11 @@ namespace ErenshorCraftingExpanded
         {
             SpawnedForageNode node = _activeGatherNode;
             long token = _activeGatherToken;
+            string reasonText = ForageGatherCancellationPolicy.Describe(reason);
             if (node == null)
             {
+                _captureState.MarkCancelled(token, reasonText);
+                ReleaseCapturedInteraction("cancel:" + reasonText);
                 EndActiveGatherAnimation();
                 ClearActiveGatherSnapshot();
                 return;
@@ -806,12 +1264,18 @@ namespace ErenshorCraftingExpanded
             if (restored && node.LabelView != null) node.LabelView.ResetAvailable();
             UpdateVisualForState(node);
             EndActiveGatherAnimation();
-            LastGatherCancelReason = ForageGatherCancellationPolicy.Describe(reason);
+            LastGatherCancelReason = reasonText;
+            _captureState.MarkCancelled(token, reasonText);
             LastGatherTransactionSummary = "gather=cancelled node=" + SafeNodeId(node) +
                 " token=" + token.ToString() + " reason=" + LastGatherCancelReason +
                 " restored=" + (restored ? "yes" : "no");
+            CraftingController.LogInfo("Foraging forage_capture_cancel node=" + SafeNodeId(node) +
+                " token=" + token.ToString() + " reason=" + LastGatherCancelReason);
             CraftingController.LogInfo("Foraging gather_cancel node=" + SafeNodeId(node) +
                 " token=" + token.ToString() + " reason=" + LastGatherCancelReason);
+            CraftingController.LogInfo("Foraging forage_gather_cancel node=" + SafeNodeId(node) +
+                " token=" + token.ToString() + " reason=" + LastGatherCancelReason);
+            ReleaseCapturedInteraction("cancel:" + reasonText);
             ClearActiveGatherSnapshot();
         }
 
@@ -824,10 +1288,19 @@ namespace ErenshorCraftingExpanded
 
         private static void ClearActiveGatherSnapshot()
         {
+            SpawnedForageNode completedNode = _activeGatherNode;
+            // Final idempotent ownership safety net for every exception/teardown path.
+            if (_activeGatherInputOwned ||
+                _captureState.Phase == ForageInteractionCapturePhase.Selected ||
+                _captureState.Phase == ForageInteractionCapturePhase.Gathering ||
+                _captureState.Phase == ForageInteractionCapturePhase.Completing ||
+                _captureState.Phase == ForageInteractionCapturePhase.Cancelled)
+                ReleaseCapturedInteraction("snapshot-clear");
             _activeGatherNode = null;
             _activeGatherToken = 0;
-            _activeGatherStartPosition = Vector3.zero;
             _activeGatherStartHp = -1;
+            _activeGatherLastHp = -1;
+            _activeGatherStartPosition = Vector3.zero;
             _activeGatherScene = string.Empty;
             _activeGatherCharacterKey = string.Empty;
             _activeRewardItemId = string.Empty;
@@ -835,6 +1308,10 @@ namespace ErenshorCraftingExpanded
             _activeRespawnSeconds = 0f;
             _activeGatherAnimationStarted = false;
             _activeNativeGrantInvokeStarted = false;
+            _activeGatherInputOwned = false;
+            // Selected ring/progress ownership is terminal. Hover may reacquire on the next normal
+            // target probe, but no completion/cancel path may leave the strong ring stuck on.
+            SetNodeInteractionStateSafe(completedNode, false, false);
         }
 
         private static long NextGatherToken()
@@ -878,11 +1355,29 @@ namespace ErenshorCraftingExpanded
                     bool localPlayer = playerTransform != null &&
                         (blocker.transform == playerTransform || blocker.transform.IsChildOf(playerTransform));
                     if (localPlayer) continue;
+                    // Preserve wall/terrain LOS while allowing the node's own native visual collider
+                    // to exist between the player and the mod-owned interaction target.
+                    if (IsColliderOwnedByNodeVisual(node, blocker)) continue;
                     if (ForageInteractionPolicy.IsSolidOcclusion(distance, _occlusionRayHits[i].distance, false)) return true;
                 }
                 return false;
             }
             catch { return true; }
+        }
+
+        private static bool IsColliderOwnedByNodeVisual(SpawnedForageNode node, Collider collider)
+        {
+            if (node == null || collider == null) return false;
+            GameObject visual = null;
+            try { visual = node.Visual; } catch { visual = null; }
+            if (visual == null) return false;
+            try
+            {
+                Transform visualRoot = visual.transform;
+                Transform hit = collider.transform;
+                return visualRoot != null && hit != null && (hit == visualRoot || hit.IsChildOf(visualRoot));
+            }
+            catch { return false; }
         }
 
         private static void TickCompletionFeedback(SpawnedForageNode node, float deltaSeconds)
@@ -939,11 +1434,16 @@ namespace ErenshorCraftingExpanded
         {
             SpawnedForageNode node = _activeGatherNode;
             if (node == null || node.State == null)
-                return "state=none lastCancel=" + LastGatherCancelReason + " lastGrant=" + LastGrantResult;
+                return "state=none capture=" + _captureState.Phase +
+                    " inputOwned=" + (_activeGatherInputOwned ? "yes" : "no") +
+                    " lastCapture={" + (_captureState.LastTerminalReason ?? string.Empty) + "}" +
+                    " lastCancel=" + LastGatherCancelReason + " lastGrant=" + LastGrantResult;
             float remaining = System.Math.Max(0f, node.State.GatherDurationSeconds - node.State.GatherElapsedSeconds);
             return "state=" + node.State.Availability +
                 " node=" + SafeNodeId(node) +
                 " token=" + _activeGatherToken.ToString() +
+                " capture=" + _captureState.Phase +
+                " inputOwned=" + (_activeGatherInputOwned ? "yes" : "no") +
                 " elapsed=" + node.State.GatherElapsedSeconds.ToString("F2") +
                 " remaining=" + remaining.ToString("F2") +
                 " lastCancel=" + LastGatherCancelReason +
@@ -972,6 +1472,7 @@ namespace ErenshorCraftingExpanded
                 }
                 if (node.WorldLabel != null && node.WorldLabel.activeSelf != visible) node.WorldLabel.SetActive(visible);
                 if (node.InteractionComponent != null) node.InteractionComponent.SetAvailable(interactionAvailable);
+                if (node.HighlightView != null) node.HighlightView.SetAvailable(visible);
                 if (availability == ForageAvailability.Available && node.LabelView != null) node.LabelView.ResetAvailable();
                 if (availability == ForageAvailability.GrantPending && node.LabelView != null) node.LabelView.SetGatherProgress(1f);
                 node.LastPresentedAvailability = availability;
@@ -997,6 +1498,7 @@ namespace ErenshorCraftingExpanded
         {
             DespawnAll();
             _spawnedScene = scene;
+            WorldThreatRuntime.BeginScene(scene, Time.unscaledTime);
             if (string.IsNullOrEmpty(scene)) return;
 
             foreach (ForageNodeDefinition def in Catalog.GetForScene(scene))
@@ -1006,10 +1508,10 @@ namespace ErenshorCraftingExpanded
             // auto-placement only in scenes where no authored forage entries exist.
             if (IsAutoPlacementEnabledForScene(scene))
             {
-                _autoTrialGeneration++;
+                // Wait until the scene threat survey freezes. This avoids placing resource tiers
+                // from a half-loaded hostile population and keeps the classification fixed for the visit.
                 _autoTrialAttemptCount = 1;
-                if (TrySpawnAutoTrial(scene) > 0) _autoTrialAttemptCount = 0;
-                else _autoTrialRetrySeconds = 2f;
+                _autoTrialRetrySeconds = 0.25f;
             }
 
             // The older survey candidate remains an explicit developer-only path. It is separate
@@ -1069,6 +1571,12 @@ namespace ErenshorCraftingExpanded
         private static int TrySpawnAutoTrial(string scene)
         {
             if (string.IsNullOrEmpty(scene)) return 0;
+            WorldThreatSnapshot threat = WorldThreatRuntime.Current;
+            if (threat == null || !threat.Frozen)
+            {
+                LastAutoTrialSummary = "waiting: world threat snapshot stabilizing";
+                return 0;
+            }
             Vector3 playerPos;
             if (!GameForagingApi.TryGetPlayerPosition(out playerPos))
             {
@@ -1098,6 +1606,7 @@ namespace ErenshorCraftingExpanded
                 for (int i = 0; i < possible.Count; i++)
                 {
                     ForageResourceDefinition resource = possible[i];
+                    if (!WorldThreatPolicy.Allows(threat.Band, resource.WorldBand)) continue;
                     if (!GameItemRegistryApi.IsCustomItemAvailable(resource.RewardItemId)) continue;
                     if (!requiredPools.Contains(resource.Pool)) requiredPools.Add(resource.Pool);
                 }
@@ -1109,6 +1618,13 @@ namespace ErenshorCraftingExpanded
             int skippedItem = 0;
             int skippedVisual = 0;
             int skippedDensity = 0;
+            int rejectedDensity = 0;
+            int rejectedWorldBand = 0;
+            int rejectedProgression = 0;
+            int rejectedRegion = 0;
+            int rejectedEvidence = 0;
+            int rejectedCap = 0;
+            int eligibleStarter = 0;
             int spawnedIndex = 0;
 
             for (int pointIndex = 0; pointIndex < points.Count; pointIndex++)
@@ -1130,14 +1646,24 @@ namespace ErenshorCraftingExpanded
                     bool visualAvailable = visualSources.Has(candidate.Pool);
                     string availabilityReason;
                     if (!ForageResourceAvailabilityPolicy.CanAutoSpawn(
-                        candidate, environment, scene, coveredEnabled, itemAvailable, visualAvailable, out availabilityReason))
+                        candidate, environment, scene, coveredEnabled, threat.Band, itemAvailable, visualAvailable, out availabilityReason))
                     {
                         if (availabilityReason == "item-donor-unavailable") skippedItem++;
                         else if (availabilityReason == "scene-visual-unavailable") skippedVisual++;
+                        else if (availabilityReason == "world-tier-too-low") rejectedWorldBand++;
+                        else if (availabilityReason == "wrong-region") rejectedRegion++;
+                        else if (availabilityReason == "wrong-environment" || availabilityReason == "resource-disabled") rejectedEvidence++;
                         else skippedDisabled++;
                         continue;
                     }
+                    if (candidate.WorldBand == ForageWorldBand.Starter) eligibleStarter++;
                     proven.Add(candidate);
+                }
+
+                if (proven.Count == 0)
+                {
+                    // Selection never ran; this is an eligibility/evidence outcome, not density.
+                    continue;
                 }
 
                 ForageResourceDefinition resource = ForageResourceSelectionPolicy.Select(
@@ -1148,7 +1674,12 @@ namespace ErenshorCraftingExpanded
                     spawnedIndex);
                 if (resource == null)
                 {
-                    skippedDensity++;
+                    if (ForageResourceSelectionPolicy.DescribeNoSelection(proven, resourceCounts) == "cap") rejectedCap++;
+                    else
+                    {
+                        rejectedDensity++;
+                        skippedDensity++;
+                    }
                     continue;
                 }
 
@@ -1188,10 +1719,18 @@ namespace ErenshorCraftingExpanded
             {
                 RemoveAutoTrialNodes();
                 LastSpawnFailureReason = "auto placement produced no usable resource cluster; points=" + points.Count +
+                    " worldBand=" + WorldThreatPolicy.DisplayName(threat.Band) +
                     " coveredExperimental=" + (coveredEnabled ? "on" : "off") +
                     " skippedDisabled=" + skippedDisabled +
                     " skippedItem=" + skippedItem +
                     " skippedVisual=" + skippedVisual +
+                    " rejectedWorldBand=" + rejectedWorldBand +
+                    " rejectedProgression=" + rejectedProgression +
+                    " rejectedRegion=" + rejectedRegion +
+                    " rejectedEvidence=" + rejectedEvidence +
+                    " rejectedCap=" + rejectedCap +
+                    " rejectedDensity=" + rejectedDensity +
+                    " eligibleStarter=" + eligibleStarter +
                     " skippedDensity=" + skippedDensity +
                     " visualEvidence={" + DescribeRequiredVisuals(requiredPools, visualSources) + "}";
                 LastAutoTrialSummary += " resources=none";
@@ -1207,11 +1746,18 @@ namespace ErenshorCraftingExpanded
             resourceSummary.Sort(System.StringComparer.OrdinalIgnoreCase);
 
             LastSpawnFailureReason = string.Empty;
-            LastAutoTrialSummary += " resources=" +
-                (resourceSummary.Count == 0 ? "none" : string.Join(",", resourceSummary.ToArray())) +
+            LastAutoTrialSummary += " worldBand=" + WorldThreatPolicy.DisplayName(threat.Band) +
+                " resources=" + (resourceSummary.Count == 0 ? "none" : string.Join(",", resourceSummary.ToArray())) +
                 " skippedDisabled=" + skippedDisabled +
                 " skippedItem=" + skippedItem +
                 " skippedVisual=" + skippedVisual +
+                " rejectedWorldBand=" + rejectedWorldBand +
+                " rejectedProgression=" + rejectedProgression +
+                " rejectedRegion=" + rejectedRegion +
+                " rejectedEvidence=" + rejectedEvidence +
+                " rejectedCap=" + rejectedCap +
+                " rejectedDensity=" + rejectedDensity +
+                " eligibleStarter=" + eligibleStarter +
                 " skippedDensity=" + skippedDensity;
             CraftingController.LogInfo("Foraging auto-placement: scene=" + scene + " " + LastAutoTrialSummary);
             return trialCount;
@@ -1237,6 +1783,7 @@ namespace ErenshorCraftingExpanded
                 if (node == null || !node.IsAutoTrial) continue;
                 try { if (node.WorldLabel != null) UnityEngine.Object.Destroy(node.WorldLabel); } catch { }
                 try { if (node.InteractionTarget != null) UnityEngine.Object.Destroy(node.InteractionTarget); } catch { }
+                try { if (node.Highlight != null) UnityEngine.Object.Destroy(node.Highlight); } catch { }
                 try { if (node.Visual != null) UnityEngine.Object.Destroy(node.Visual); } catch { }
                 _spawned.RemoveAt(i);
             }
@@ -1307,16 +1854,26 @@ namespace ErenshorCraftingExpanded
             ForageResourceDefinition resource)
         {
             string clusterSummary;
-            GameObject visual = ForageAutoPlacementTrial.BuildTrialClusterVisual(def.Id, visualSource, resource, out clusterSummary);
+            GameObject visual = ForageAutoPlacementTrial.BuildTrialClusterVisual(def.Id, visualSource, resource, point.Position, point.RotationY, out clusterSummary);
             if (visual == null)
             {
                 LastSpawnFailureReason = def.Id + ": native vegetation cluster creation failed (" + clusterSummary + ").";
+                LogAutoVisualAttempt(scene: def.Scene, resource: resource, source: visualSource, detail: clusterSummary, bindingAllowed: false);
                 return false;
             }
 
-            visual.transform.position = point.Position;
-            visual.transform.rotation = Quaternion.Euler(0f, point.RotationY, 0f);
-            GameObject label = ForageNodeWorldLabel.Create(visual, def.DisplayName);
+            // BuildTrialClusterVisual established this root's final world pose before its
+            // renderer-bounds grounding proof. Do not translate/rotate/scale it afterward.
+            string visualFailure;
+            Bounds presentationBounds;
+            if (!TryAuditProductionVisual(visual, true, out presentationBounds, out visualFailure))
+            {
+                LastSpawnFailureReason = def.Id + ": visual clone rejected (" + visualFailure + ").";
+                LogAutoVisualAttempt(def.Scene, resource, visualSource, visualFailure, false);
+                try { UnityEngine.Object.Destroy(visual); } catch { }
+                return false;
+            }
+            GameObject label = ForageNodeWorldLabel.Create(visual, def.DisplayName, presentationBounds);
             if (label == null)
             {
                 LastSpawnFailureReason = def.Id + ": world resource label could not be created.";
@@ -1346,10 +1903,78 @@ namespace ErenshorCraftingExpanded
                 TintApplied = false,
                 AppliedScale = Vector3.one
             };
-            AttachInteractionTarget(spawned);
+            if (!AttachInteractionTarget(spawned, presentationBounds))
+            {
+                LastSpawnFailureReason = def.Id + ": visual presentation binding rejected.";
+                try { UnityEngine.Object.Destroy(label); } catch { }
+                try { UnityEngine.Object.Destroy(visual); } catch { }
+                return false;
+            }
             _spawned.Add(spawned);
+            LogAutoVisualAttempt(def.Scene, resource, visualSource, visualFailure, true);
             LastNameplateSummary = "bound node=" + def.Id + " " + ForageNodeWorldLabel.DescribePresentation();
             return true;
+        }
+
+        // A label/collider is only legal after a mod-owned vegetation clone proves it can render.
+        private static bool HasMaterializedAutoVisual(GameObject visual, out string reason)
+        {
+            Bounds bounds;
+            return TryAuditProductionVisual(visual, true, out bounds, out reason);
+        }
+
+        private static void LogAutoVisualAttempt(string scene, ForageResourceDefinition resource, RendererScanResult source, string detail, bool bindingAllowed)
+        {
+            string family = resource == null ? "unknown" : resource.Pool.ToString();
+            string key = (scene ?? string.Empty) + ":" + family;
+            string donor = source == null ? "(none)" : (source.GameObjectName + "/" + source.MeshName);
+            CraftingController.LogInfo("Foraging forage_visual_spawn scene=" + (scene ?? string.Empty) +
+                " family=" + family + " donor=" + donor + " bindingAllowed=" + bindingAllowed + " " + (detail ?? string.Empty));
+            HashSet<string> seen = bindingAllowed ? _visualFamilySuccessLogged : _visualFamilyFailureLogged;
+            if (seen.Add(key))
+                CraftingController.LogInfo("Foraging forage_visual_spawn_first_" + (bindingAllowed ? "success" : "failure") +
+                    " scene=" + (scene ?? string.Empty) + " family=" + family + " donor=" + donor + " " + (detail ?? string.Empty));
+        }
+
+        // The presentation authority is the actual final cloned hierarchy, not the donor scan or
+        // a label fallback. A resource may bind interaction only when at least one active mesh can
+        // draw with a usable material, its aggregate bounds are finite/nontrivial, and auto-cluster
+        // grounding/anchor remain coherent with the accepted placement pose.
+        private static bool TryAuditProductionVisual(GameObject visual, bool requireGrounding, out Bounds combined, out string reason)
+        {
+            combined = new Bounds(); reason = "unknown";
+            if (visual == null || !visual.activeInHierarchy) { reason = "root-inactive"; return false; }
+            Renderer[] renderers = CacheVisualRenderers(visual);
+            bool found = false; int active = 0;
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                MeshRenderer renderer = renderers[i] as MeshRenderer;
+                MeshFilter filter = renderer == null ? null : renderer.GetComponent<MeshFilter>();
+                if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy || filter == null || filter.sharedMesh == null) continue;
+                Material[] materials = renderer.sharedMaterials;
+                bool material = false;
+                if (materials != null) for (int m = 0; m < materials.Length; m++) if (materials[m] != null && materials[m].shader != null) { material = true; break; }
+                Bounds bounds = renderer.bounds; Vector3 scale = renderer.transform.lossyScale;
+                if (!material || !IsFinite(bounds.min) || !IsFinite(bounds.max) || !IsFinite(scale) ||
+                    Mathf.Abs(scale.x) < 0.001f || Mathf.Abs(scale.y) < 0.001f || Mathf.Abs(scale.z) < 0.001f ||
+                    Mathf.Abs(scale.x) > ForagePresentationPolicy.VisualMaximumScaleAxis || Mathf.Abs(scale.y) > ForagePresentationPolicy.VisualMaximumScaleAxis || Mathf.Abs(scale.z) > ForagePresentationPolicy.VisualMaximumScaleAxis ||
+                    Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z)) < ForagePresentationPolicy.VisualMinimumLargestDimension) continue;
+                if (!found) { combined = bounds; found = true; } else combined.Encapsulate(bounds);
+                active++;
+            }
+            if (!found) { reason = "no-active-renderable-mesh"; return false; }
+            Vector3 root = visual.transform.position;
+            float horizontal = new Vector2(combined.center.x - root.x, combined.center.z - root.z).magnitude;
+            float groundingDelta = Mathf.Abs(combined.min.y - root.y);
+            if (horizontal > ForagePresentationPolicy.VisualMaximumAnchorHorizontalOffset) { reason = "renderer-anchor-offset=" + horizontal.ToString("F2"); return false; }
+            if (requireGrounding && groundingDelta > ForagePresentationPolicy.GroundingTolerance) { reason = "post-ground-delta=" + groundingDelta.ToString("F3"); return false; }
+            reason = "activeRenderers=" + active + " bounds=" + combined.size.ToString("F2") + " groundDelta=" + groundingDelta.ToString("F3") + " anchorOffset=" + horizontal.ToString("F2");
+            return true;
+        }
+
+        private static bool IsFinite(Vector3 value)
+        {
+            return !float.IsNaN(value.x) && !float.IsInfinity(value.x) && !float.IsNaN(value.y) && !float.IsInfinity(value.y) && !float.IsNaN(value.z) && !float.IsInfinity(value.z);
         }
 
         private static void SpawnDefinition(ForageNodeDefinition def)
@@ -1396,7 +2021,15 @@ namespace ErenshorCraftingExpanded
                 if (def.TintEnabled)
                     tintApplied = GameForagingApi.TryApplyTint(visual, new Color(def.TintR, def.TintG, def.TintB), def.TintColorProperty);
 
-                GameObject label = ForageNodeWorldLabel.Create(visual, def.DisplayName);
+                Bounds presentationBounds;
+                string presentationFailure;
+                if (!TryAuditProductionVisual(visual, false, out presentationBounds, out presentationFailure))
+                {
+                    LastSpawnFailureReason = def.Id + ": visual clone rejected (" + presentationFailure + ").";
+                    try { UnityEngine.Object.Destroy(visual); } catch { }
+                    return;
+                }
+                GameObject label = ForageNodeWorldLabel.Create(visual, def.DisplayName, presentationBounds);
                 if (label == null)
                 {
                     LastSpawnFailureReason = def.Id + ": mod-owned world label could not be created.";
@@ -1419,59 +2052,59 @@ namespace ErenshorCraftingExpanded
                     TintApplied = tintApplied,
                     AppliedScale = appliedScale
                 };
-                AttachInteractionTarget(spawned);
+                if (!AttachInteractionTarget(spawned, presentationBounds))
+                {
+                    LastSpawnFailureReason = def.Id + ": visual presentation binding rejected.";
+                    try { UnityEngine.Object.Destroy(label); } catch { }
+                    try { UnityEngine.Object.Destroy(visual); } catch { }
+                    return;
+                }
                 _spawned.Add(spawned);
                 LastNameplateSummary = "bound node=" + def.Id + " " + ForageNodeWorldLabel.DescribePresentation();
                 LastSpawnFailureReason = string.Empty;
         }
 
-        private static void AttachInteractionTarget(SpawnedForageNode node)
+        private static bool AttachInteractionTarget(SpawnedForageNode node, Bounds auditedBounds)
         {
-            if (node == null || node.Visual == null) return;
+            if (node == null || node.Visual == null) return false;
             try
             {
-                Renderer[] renderers = node.VisualRenderers ?? CacheVisualRenderers(node.Visual);
-                bool haveBounds = false;
-                Bounds combined = new Bounds();
-                if (renderers != null)
-                {
-                    for (int i = 0; i < renderers.Length; i++)
-                    {
-                        Renderer renderer = renderers[i];
-                        if (renderer == null) continue;
-                        if (!haveBounds) { combined = renderer.bounds; haveBounds = true; }
-                        else combined.Encapsulate(renderer.bounds);
-                    }
-                }
-                Vector3 center = haveBounds
-                    ? new Vector3(combined.center.x, combined.min.y + combined.size.y * 0.45f, combined.center.z)
-                    : node.Visual.transform.position + Vector3.up * 0.45f;
-                float radius = haveBounds
-                    ? ForageInteractionPolicy.CalculateHitRadius(combined.size.x, combined.size.z)
-                    : ForageInteractionPolicy.MinimumHitRadius;
+                Bounds combined = auditedBounds;
+                Vector3 center = new Vector3(combined.center.x, combined.min.y + combined.size.y * 0.45f, combined.center.z);
+                float radius = ForageInteractionPolicy.CalculateHitRadius(combined.size.x, combined.size.z);
+                float hitHeight = ForageInteractionPolicy.CalculateHitHeight(combined.size.y, radius);
 
                 GameObject targetObject = new GameObject("ForageInteractionTarget_" + SafeNodeId(node));
                 targetObject.layer = 2; // Ignore Raycast to vanilla/default rays; our explicit mask owns it.
-                targetObject.transform.position = center;
+                targetObject.transform.position = new Vector3(combined.center.x, combined.min.y + hitHeight * 0.5f, combined.center.z);
                 targetObject.transform.rotation = Quaternion.identity;
                 targetObject.transform.localScale = Vector3.one;
-                SphereCollider sphere = targetObject.AddComponent<SphereCollider>();
-                sphere.isTrigger = true;
-                sphere.radius = radius;
+                CapsuleCollider capsule = targetObject.AddComponent<CapsuleCollider>();
+                capsule.isTrigger = true;
+                capsule.direction = 1;
+                capsule.radius = radius;
+                capsule.height = hitHeight;
                 ForageNodeInteractionTarget target = targetObject.AddComponent<ForageNodeInteractionTarget>();
                 target.Node = node;
-                target.HitCollider = sphere;
+                target.HitCollider = capsule;
                 node.InteractionTarget = targetObject;
                 node.InteractionComponent = target;
+                ForageNodeHighlightView highlightView;
+                GameObject highlight = ForageNodeHighlight.Create(combined, SafeNodeId(node), out highlightView);
+                node.Highlight = highlight;
+                node.HighlightView = highlightView;
+                return true;
             }
             catch (System.Exception ex)
             {
                 LastTargetSummary = "target-binding-failed node=" + SafeNodeId(node) + " reason={" + ex.Message + "}";
+                return false;
             }
         }
 
         internal static void SceneTransition()
         {
+            WorldThreatRuntime.Reset();
             CancelActiveGather(ForageGatherCancelReason.ZoneChanged);
             DespawnAll();
             ClearVisualSourceCache();
@@ -1487,8 +2120,10 @@ namespace ErenshorCraftingExpanded
 
         internal static void Shutdown()
         {
+            WorldThreatRuntime.Reset();
             CancelActiveGather(ForageGatherCancelReason.PluginUnload);
             DespawnAll();
+            ForageNodeHighlight.Shutdown();
             ClearVisualSourceCache();
             ForageDepletionLedger.Clear();
         }
@@ -1504,22 +2139,22 @@ namespace ErenshorCraftingExpanded
             // idempotent final guard for rebuild/error paths so an optional StartLoot pose can
             // never survive destruction of its node.
             if (_activeGatherNode != null) CancelActiveGather(ForageGatherCancelReason.WorldInteraction);
-            foreach (SpawnedForageNode node in _spawned)
-            {
-                try { if (node.WorldLabel != null) UnityEngine.Object.Destroy(node.WorldLabel); } catch { }
-                try { if (node.InteractionTarget != null) UnityEngine.Object.Destroy(node.InteractionTarget); } catch { }
-                try { if (node.Visual != null) UnityEngine.Object.Destroy(node.Visual); } catch { }
-            }
+            foreach (SpawnedForageNode node in _spawned) DestroyNodeOwnedObjects(node);
             _spawned.Clear();
             _targetedNode = null;
             _interactionCamera = null;
             _nextInteractionCameraProbe = 0f;
             ForageGameplayCameraResolver.Reset();
             ForageNodeWorldLabel.ResetDiagnostics();
+            _visualFamilySuccessLogged.Clear();
+            _visualFamilyFailureLogged.Clear();
             _nextTargetProbe = 0f;
             _lastEligibilityNodeId = string.Empty;
             _lastEligibility = ForageInteractionEligibility.NoNode;
             LastTargetSummary = "target=(none)";
+            LastTargetInvariantSummary = "targetInvariant=healthy";
+            _lastTargetInvariantKey = string.Empty;
+            _lastTargetInvariantLogAt = -999f;
             _spawnedScene = string.Empty;
             _autoTrialAttemptCount = 0;
             _autoTrialRetrySeconds = 0f;

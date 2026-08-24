@@ -24,12 +24,15 @@ Write-Host "Target Erenshor install: $GameDir"
 if ($LASTEXITCODE -ne 0) { throw 'Build failed; nothing installed, nothing backed up.' }
 
 $builtDll = Join-Path $ScriptRoot 'bin\ErenshorCraftingExpanded.dll'
-$installed = Install-CraftingDllVerified -BuiltDll $builtDll -GameDir $GameDir -BackupRoot (Join-Path $ScriptRoot 'test-backups')
+$installed = Install-CraftingDllVerified -BuiltDll $builtDll -GameDir $GameDir -BackupRoot (Join-Path $ScriptRoot 'test-backups') -AssetSourceDir (Join-Path $ScriptRoot 'assets')
 
 Write-Host ''
 Write-Host 'TEST INSTALL OK' -ForegroundColor Green
 Write-Host "  Installed: $($installed.Destination)"
 Write-Host "  SHA-256: $($installed.Hash)"
+Write-Host "  Assets: $($installed.AssetsDestination)"
+Write-Host "  Asset SHA-256: $($installed.AssetsHash)"
+Write-Host "  Icons: $($installed.IconCount)"
 Write-Host "  Backup session: $($installed.Session)"
 Write-Host ''
 Write-Host 'Run REMOVE_TEST.ps1 (same -GameDir) when testing is complete.'

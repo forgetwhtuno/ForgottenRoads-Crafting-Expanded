@@ -466,6 +466,98 @@ namespace ErenshorCraftingExpanded
             return string.Equals(ReadString(rewards[0], "Id"), donor.OutputId, StringComparison.Ordinal);
         }
 
+        internal static object FindExpandedIdentityDonor(object itemDatabaseInstance)
+        {
+            if (itemDatabaseInstance == null) return null;
+            try
+            {
+                Type itemType = FindType("Item");
+                UnityEngine.Object[] nativeItems = itemType == null ? null : Resources.LoadAll("Items", itemType);
+                if (nativeItems == null) return null;
+                object best = null; string bestId = string.Empty;
+                for (int i = 0; i < nativeItems.Length; i++)
+                {
+                    object candidate = nativeItems[i];
+                    if (candidate == null || !ReadBool(candidate, "Template") || ReadBool(candidate, "FuelSource")) continue;
+                    string id = ReadString(candidate, "Id");
+                    if (string.IsNullOrEmpty(id) || CraftingExpandedItemIds.IsInOwnedRange(id) || GameCraftingApi.IsSpecialCombineTemplate(id)) continue;
+                    IList ingredients = ReadField(candidate, "TemplateIngredients") as IList;
+                    IList rewards = ReadField(candidate, "TemplateRewards") as IList;
+                    if (ingredients == null || ingredients.Count == 0 || rewards == null || rewards.Count != 1 || rewards[0] == null) continue;
+                    object live = GameItemRegistryApi.TryGetLiveItem(itemDatabaseInstance, id);
+                    if (live == null || !ReferenceEquals(live, candidate)) continue;
+                    if (best == null || string.Compare(id, bestId, StringComparison.Ordinal) < 0) { best = candidate; bestId = id; }
+                }
+                return best;
+            }
+            catch { return null; }
+        }
+
+        internal static object CloneExpandedTemplateIdentity(object donorTemplate, CustomRecipeDefinition definition, out string failure)
+        {
+            failure = string.Empty;
+            if (donorTemplate == null || definition == null) { failure = "expanded recipe identity inputs unavailable"; return null; }
+            try
+            {
+                UnityEngine.Object donor = donorTemplate as UnityEngine.Object;
+                if (donor == null) { failure = "expanded recipe donor is not a Unity Item"; return null; }
+                UnityEngine.Object clone = UnityEngine.Object.Instantiate(donor);
+                SetField(clone, "Id", definition.TemplateItemId);
+                SetField(clone, "ItemName", RecipeTemplateItemPolicy.FormatTemplateName(definition.DisplayName));
+                SetField(clone, "Lore", "Forgotten Roads crafting recipe. Permanent knowledge is stored separately from this physical template.");
+                SetField(clone, "ItemValue", 0); SetField(clone, "Template", false); SetField(clone, "FuelSource", false);
+                SetField(clone, "PlayerCannotSell", true); SetField(clone, "NoTradeNoDestroy", true);
+                SetField(clone, "ItemEffectOnClick", null); SetField(clone, "TeachSpell", null); SetField(clone, "TeachSkill", null);
+                SetField(clone, "AssignQuestOnRead", null); SetField(clone, "CompleteOnRead", null); SetField(clone, "Aura", null); SetField(clone, "WornEffect", null); SetField(clone, "WeaponProcOnHit", null);
+                ClearClasses(clone);
+                IList ingredients = NewListLike(clone, "TemplateIngredients"); IList rewards = NewListLike(clone, "TemplateRewards");
+                if (ingredients == null || rewards == null) { UnityEngine.Object.Destroy(clone); failure = "expanded recipe identity lists unavailable"; return null; }
+                GameItemRegistryApi.MarkOwned(clone, definition.TemplateItemId);
+                return clone;
+            }
+            catch (Exception ex) { failure = "expanded recipe identity clone failed: " + ex.GetType().Name; return null; }
+        }
+
+        internal static bool ConfigureOwnedExpandedRecipe(object item, CustomRecipeDefinition definition, IList ingredientObjects, object outputItem, bool active, out string failure)
+        {
+            failure = string.Empty;
+            if (item == null || definition == null) { failure = "expanded recipe inputs unavailable"; return false; }
+            if (!GameItemRegistryApi.HasOwnedMarker(item, definition.TemplateItemId)) { failure = "expanded recipe identity is not mod-owned"; return false; }
+            try
+            {
+                SetField(item, "Id", definition.TemplateItemId);
+                SetField(item, "ItemName", RecipeTemplateItemPolicy.FormatTemplateName(definition.DisplayName));
+                SetField(item, "Lore", "Forgotten Roads crafting recipe for " + definition.DisplayName + ".");
+                SetField(item, "ItemValue", 0); SetField(item, "FuelSource", false); SetField(item, "PlayerCannotSell", true); SetField(item, "NoTradeNoDestroy", true);
+                SetField(item, "ItemEffectOnClick", null); SetField(item, "TeachSpell", null); SetField(item, "TeachSkill", null); SetField(item, "AssignQuestOnRead", null); SetField(item, "CompleteOnRead", null);
+                SetField(item, "Aura", null); SetField(item, "WornEffect", null); SetField(item, "WeaponProcOnHit", null); ClearClasses(item);
+                IList ingredients = NewListLike(item, "TemplateIngredients"); IList rewards = NewListLike(item, "TemplateRewards");
+                if (ingredients == null || rewards == null) { failure = "expanded recipe lists unavailable"; return false; }
+                if (!active) { SetField(item, "Template", false); return true; }
+                if (ingredientObjects == null || outputItem == null) { failure = "expanded recipe item bindings unavailable"; return false; }
+                for (int i = 0; i < ingredientObjects.Count; i++) ingredients.Add(ingredientObjects[i]);
+                rewards.Add(outputItem); SetField(item, "Template", true);
+                if (!MatchesExpandedRecipe(item, definition)) { failure = "expanded recipe exact validation failed"; return false; }
+                return true;
+            }
+            catch (Exception ex) { failure = "expanded recipe configuration failed: " + ex.GetType().Name; return false; }
+        }
+
+        internal static bool MatchesExpandedRecipe(object item, CustomRecipeDefinition definition)
+        {
+            if (item == null || definition == null || !GameItemRegistryApi.HasOwnedMarker(item, definition.TemplateItemId) || !ReadBool(item, "Template")) return false;
+            IList ingredients = ReadField(item, "TemplateIngredients") as IList; IList rewards = ReadField(item, "TemplateRewards") as IList;
+            if (ingredients == null || rewards == null || rewards.Count != 1 || !string.Equals(ReadString(rewards[0], "Id"), definition.OutputItemId, StringComparison.Ordinal)) return false;
+            List<string> expected = new List<string>();
+            for (int i = 0; i < definition.Ingredients.Count; i++) for (int q = 0; q < definition.Ingredients[i].Quantity; q++) expected.Add(definition.Ingredients[i].ItemId);
+            if (ingredients.Count != expected.Count) return false;
+            List<string> actual = new List<string>();
+            for (int i = 0; i < ingredients.Count; i++) { string id = ReadString(ingredients[i], "Id"); if (string.IsNullOrEmpty(id)) return false; actual.Add(id); }
+            expected.Sort(StringComparer.Ordinal); actual.Sort(StringComparer.Ordinal);
+            for (int i = 0; i < expected.Count; i++) if (!string.Equals(expected[i], actual[i], StringComparison.Ordinal)) return false;
+            return true;
+        }
+
         internal static int ReadLiveComponentSlotCapacity()
         {
             return ReadComponentSlotCapacity();

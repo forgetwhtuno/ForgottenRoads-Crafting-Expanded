@@ -28,8 +28,8 @@ namespace ErenshorCraftingExpanded
         internal const float HintLineHeight = 24f;
         internal const float ResourceRowHeight = 42f;
         internal const float MaterialRowHeight = 22f;
-        internal const float KnownRecipeRowHeight = 48f;
-        internal const float LockedRecipeRowHeight = 44f;
+        internal const float KnownRecipeRowHeight = 64f;
+        internal const float LockedRecipeRowHeight = 60f;
 
         internal static float HeightFor(bool commissionsEnabled)
         {

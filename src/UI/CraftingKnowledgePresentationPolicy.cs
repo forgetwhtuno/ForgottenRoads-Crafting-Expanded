@@ -27,6 +27,7 @@ namespace ErenshorCraftingExpanded
         public bool HasRecipe;
         public bool UsesNativeSpecialRules;
         public string Title = string.Empty;
+        public string OutputQuantityText = string.Empty;
         public string StatusText = string.Empty;
         public readonly List<CraftingMaterialDisplayModel> Materials = new List<CraftingMaterialDisplayModel>();
     }
@@ -55,14 +56,14 @@ namespace ErenshorCraftingExpanded
             if (discovered)
             {
                 row.StateText = "DISCOVERED";
-                row.DetailText = "Known resource";
+                row.DetailText = "World " + WorldThreatPolicy.DisplayName(resource.WorldBand) + "  •  Foraging " + resource.MinimumSkill.ToString();
                 return row;
             }
 
             row.StateText = "UNDISCOVERED";
             if (row.SkillLocked)
             {
-                row.DetailText = "Requires Foraging " + resource.MinimumSkill.ToString();
+                row.DetailText = "Requires Foraging " + resource.MinimumSkill.ToString() + "  •  World " + WorldThreatPolicy.DisplayName(resource.WorldBand);
                 return row;
             }
 
@@ -111,6 +112,7 @@ namespace ErenshorCraftingExpanded
             model.Title = !string.IsNullOrEmpty(recipe.OutputItemName)
                 ? recipe.OutputItemName
                 : (!string.IsNullOrEmpty(recipe.TemplateItemName) ? recipe.TemplateItemName : "Loaded recipe");
+            model.OutputQuantityText = BuildOutputQuantityText(recipe.OutputItemId);
 
             if (usesNativeSpecialRules)
             {
@@ -150,6 +152,53 @@ namespace ErenshorCraftingExpanded
             return model;
         }
 
+        public static string BuildRecipeRequirementSummary(CustomRecipeDefinition recipe)
+        {
+            if (recipe == null) return string.Empty;
+            List<string> parts = new List<string>();
+            for (int i = 0; i < recipe.Ingredients.Count; i++)
+            {
+                CustomRecipeIngredient ingredient = recipe.Ingredients[i];
+                if (ingredient == null || ingredient.Quantity <= 0) continue;
+                parts.Add(ingredient.Quantity.ToString() + "x " + ResolveModContentName(ingredient.ItemId));
+            }
+            string needs = parts.Count == 0 ? "No listed materials" : string.Join(" + ", parts.ToArray());
+            string output = ResolveModContentName(recipe.OutputItemId);
+            string quantity = BuildOutputQuantityText(recipe.OutputItemId);
+            if (string.IsNullOrEmpty(quantity)) quantity = "Output quantity uses native forge rules";
+            ExpandedItemDefinition outputItem = ExpandedContentItems.Get(recipe.OutputItemId);
+            string outputType = outputItem == null ? "Output" : (outputItem.Kind == ExpandedItemKind.Consumable ? BuildConsumableCategoryText(outputItem.ConsumableFamily) : (outputItem.Kind == ExpandedItemKind.Equipment ? "Equipment" : "Component"));
+            string discovery = recipe.RequiredDiscoveries == null || recipe.RequiredDiscoveries.Count == 0
+                ? "none" : string.Join(", ", recipe.RequiredDiscoveries.ToArray());
+            return quantity + " " + output + "  •  " + outputType + "  •  Crafting " + recipe.MinimumCraftingLevel.ToString() +
+                "  •  Foraging " + recipe.MinimumForagingLevel.ToString() + "  •  Discoveries " + discovery + "  •  Needs " + needs;
+        }
+
+        private static string BuildConsumableCategoryText(NativeConsumableFamily family)
+        {
+            if (family == NativeConsumableFamily.HealthRecovery) return "Consumable / direct health recovery";
+            if (family == NativeConsumableFamily.ManaRecovery) return "Consumable / direct mana recovery";
+            if (family == NativeConsumableFamily.Utility) return "Consumable / self-only utility";
+            return "Consumable / recovery";
+        }
+
+        private static string BuildOutputQuantityText(string outputItemId)
+        {
+            ExpandedItemDefinition item = ExpandedContentItems.Get(outputItemId);
+            if (item == null) return string.Empty;
+            if (item.Kind == ExpandedItemKind.Material || item.Kind == ExpandedItemKind.Consumable) return "Makes 1-5x by native fuel tier:";
+            return "Makes 1x";
+        }
+
+        private static string ResolveModContentName(string itemId)
+        {
+            ForageResourceDefinition resource = ForageResourceCatalog.FindByRewardItemId(itemId);
+            if (resource != null && !string.IsNullOrEmpty(resource.DisplayName)) return resource.DisplayName;
+            ExpandedItemDefinition item = ExpandedContentItems.Get(itemId);
+            if (item != null && !string.IsNullOrEmpty(item.Name)) return item.Name;
+            return string.IsNullOrEmpty(itemId) ? "Material" : "Item " + itemId;
+        }
+
         public static string BuildRecipeSummary(int knownCount, int totalCount)
         {
             if (knownCount < 0) knownCount = 0;
@@ -161,18 +210,18 @@ namespace ErenshorCraftingExpanded
         private static string ExploreHintForResource(ForageResourceDefinition resource)
         {
             if (resource == null) return "Explore suitable areas";
+            string world = WorldThreatPolicy.DisplayName(resource.WorldBand) + "-threat ";
             if (resource.RegionalRule == ForageRegionalRule.ExplicitScenes &&
                 resource.EligibleScenes != null && resource.EligibleScenes.Length > 0)
             {
                 if (resource.EligibleScenes.Length == 1)
-                    return "Explore " + resource.EligibleScenes[0];
-                return "Explore " + string.Join(", ", resource.EligibleScenes);
+                    return "Explore " + resource.EligibleScenes[0] + " (" + world.Trim() + ")";
+                return "Explore " + string.Join(", ", resource.EligibleScenes) + " (" + world.Trim() + ")";
             }
 
-            if (resource.Pool == ForageResourcePool.CoveredFungi ||
-                resource.Pool == ForageResourcePool.CoveredMoss)
-                return "Explore covered or cave areas";
-            return "Explore open areas";
+            if (resource.Pool == ForageResourcePool.CoveredFungi || resource.Pool == ForageResourcePool.CoveredMoss)
+                return "Explore " + world + "covered or cave areas";
+            return "Explore " + world + "open areas";
         }
 
         private static int CountAvailable(IDictionary<string, int> availableByItemId, string itemId)
@@ -201,35 +250,35 @@ namespace ErenshorCraftingExpanded
         {
             ForageResourceDefinition herb = ForageResourceCatalog.FindByKnowledgeKey("wild_herb");
             CraftingResourceDisplayModel herbUnknown = BuildResourceRow(herb, 1, false, false);
-            if (herbUnknown == null || herbUnknown.StateText != "UNDISCOVERED" || herbUnknown.DetailText != "Explore open areas")
+            if (herbUnknown == null || herbUnknown.StateText != "UNDISCOVERED" || herbUnknown.DetailText != "Explore Starter-threat open areas")
                 return "FAIL resource undiscovered exploration state";
             CraftingResourceDisplayModel herbKnown = BuildResourceRow(herb, 3, true, false);
             if (herbKnown == null || !herbKnown.Discovered || herbKnown.StateText != "DISCOVERED")
                 return "FAIL resource discovered state";
 
             ForageResourceDefinition mushroom = ForageResourceCatalog.FindByKnowledgeKey("cave_mushroom");
-            if (BuildResourceRow(mushroom, 20, false, false) != null) return "FAIL disabled experimental resource should stay out of player list";
+            if (BuildResourceRow(mushroom, 20, false, false) != null) return "FAIL disabled covered resource should stay out of player list";
             CraftingResourceDisplayModel mushroomLocked = BuildResourceRow(mushroom, 7, false, true);
-            if (mushroomLocked == null || !mushroomLocked.SkillLocked || mushroomLocked.DetailText != "Requires Foraging 8")
+            if (mushroomLocked == null || !mushroomLocked.SkillLocked || mushroomLocked.DetailText != "Requires Foraging 8  •  World Starter")
                 return "FAIL resource skill lock state";
             CraftingResourceDisplayModel mushroomExplore = BuildResourceRow(mushroom, 8, false, true);
-            if (mushroomExplore == null || mushroomExplore.DetailText != "Explore covered or cave areas")
+            if (mushroomExplore == null || mushroomExplore.DetailText != "Explore Starter-threat covered or cave areas")
                 return "FAIL covered resource exploration hint";
 
             ForageResourceDefinition caveMoss = ForageResourceCatalog.FindByKnowledgeKey("cave_moss");
             CraftingResourceDisplayModel mossExplore = BuildResourceRow(caveMoss, 24, false, true);
-            if (mossExplore == null || mossExplore.DetailText != "Explore covered or cave areas")
+            if (mossExplore == null || mossExplore.DetailText != "Explore Mid-threat covered or cave areas")
                 return "FAIL covered moss exploration hint";
 
             ForageResourceDefinition blightroot = ForageResourceCatalog.FindByKnowledgeKey("blightroot");
             CraftingResourceDisplayModel rootExplore = BuildResourceRow(blightroot, 36, false, false);
-            if (rootExplore == null || rootExplore.DetailText != "Explore The Blight")
+            if (rootExplore == null || rootExplore.DetailText != "Explore The Blight (Mid-high-threat)")
                 return "FAIL explicit regional exploration hint";
 
             List<CraftingResourceDisplayModel> next = new List<CraftingResourceDisplayModel>();
             next.Add(herbKnown);
             next.Add(mushroomExplore);
-            if (BuildNextExplorationHint(next) != "Explore covered or cave areas for Cave Mushroom.")
+            if (BuildNextExplorationHint(next) != "Explore Starter-threat covered or cave areas for Cave Mushroom.")
                 return "FAIL next exploration hint";
 
             CraftRecipeSnapshot recipe = new CraftRecipeSnapshot();
@@ -247,11 +296,27 @@ namespace ErenshorCraftingExpanded
             available["ore"] = 7;
             CraftingActiveRecipeDisplayModel craftable = BuildActiveRecipe(recipe, available, 4, 1, false);
             if (craftable.StatusText != "CRAFTABLE NOW  •  1 available") return "FAIL active recipe craftable presentation";
+            CraftRecipeSnapshot modMaterialRecipe = new CraftRecipeSnapshot();
+            modMaterialRecipe.OutputItemId = CraftingExpandedItemIds.WovenFiberCordId; modMaterialRecipe.OutputItemName = "Woven Fiber Cord";
+            CraftingActiveRecipeDisplayModel modMaterial = BuildActiveRecipe(modMaterialRecipe, null, 0, 0, false);
+            if (modMaterial.OutputQuantityText != "Makes 1-5x by native fuel tier:") return "FAIL native fuel-tier output quantity presentation";
             CraftingActiveRecipeDisplayModel special = BuildActiveRecipe(recipe, available, 4, 0, true);
             if (!special.UsesNativeSpecialRules || special.Materials.Count != 0 || special.StatusText.IndexOf("Native special combine", StringComparison.Ordinal) != 0)
                 return "FAIL native special recipe presentation";
             CraftingActiveRecipeDisplayModel empty = BuildActiveRecipe(null, null, 0, 0, false);
             if (empty.HasRecipe || empty.Title != "No recipe loaded") return "FAIL no-recipe presentation";
+
+            CustomRecipeDefinition expanded = ExpandedContentRecipes.All[0];
+            string expandedSummary = BuildRecipeRequirementSummary(expanded);
+            if (expandedSummary.IndexOf("Makes 1-5x by native fuel tier: Woven Fiber Cord", StringComparison.Ordinal) < 0 ||
+                expandedSummary.IndexOf("2x Field Fiber", StringComparison.Ordinal) < 0)
+                return "FAIL expanded recipe ingredient/output summary";
+
+            CustomRecipeDefinition tonicRecipe = ExpandedContentRecipes.All[2];
+            string tonicSummary = BuildRecipeRequirementSummary(tonicRecipe);
+            if (tonicSummary.IndexOf("Consumable / direct health recovery", StringComparison.Ordinal) < 0 ||
+                tonicSummary.IndexOf("Crafting 4", StringComparison.Ordinal) < 0 || tonicSummary.IndexOf("3x Wild Herb", StringComparison.Ordinal) < 0)
+                return "FAIL consumable effect-category/requirement summary";
 
             if (BuildRecipeSummary(2, 5) != "RECIPES / TEMPLATES  •  Known 2  •  Locked 3") return "FAIL recipe summary presentation";
             if (BuildRecipeSummary(9, 4) != "RECIPES / TEMPLATES  •  Known 4  •  Locked 0") return "FAIL recipe summary normalization";

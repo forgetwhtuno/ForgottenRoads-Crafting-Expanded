@@ -29,8 +29,14 @@ namespace ErenshorCraftingExpanded
             }
             if (eligible.Count == 0) return null;
 
-            // The first point always prefers the densest proven family. This preserves a reliable
-            // Wild Herb baseline where it exists while later points can introduce uncommon families.
+            // Keep the first safe points representative of the authored Starter ecology. These
+            // are floors, not forced spawns: a family is selected only when it is already in the
+            // proven candidate set for the current environment/scene.
+            ForageResourceDefinition starterFloor = SelectStarterFloor(eligible, currentCounts, pointIndex);
+            if (starterFloor != null) return starterFloor;
+
+            // The first point otherwise prefers the densest proven family. This preserves a
+            // reliable baseline even when one or more Starter families are unavailable.
             if (pointIndex <= 0)
             {
                 ForageResourceDefinition best = eligible[0];
@@ -61,11 +67,54 @@ namespace ErenshorCraftingExpanded
             return eligible[eligible.Count - 1];
         }
 
+        private static ForageResourceDefinition SelectStarterFloor(
+            IList<ForageResourceDefinition> eligible,
+            IDictionary<string, int> currentCounts,
+            int pointIndex)
+        {
+            if (pointIndex < 0 || pointIndex > 2) return null;
+            string[] floorKeys = new string[] { "wild_herb", "resin_sprig", "field_fiber" };
+            string key = floorKeys[pointIndex];
+            for (int i = 0; i < eligible.Count; i++)
+            {
+                ForageResourceDefinition resource = eligible[i];
+                if (resource != null && string.Equals(resource.KnowledgeKey, key, StringComparison.Ordinal) &&
+                    IsStarterFloor(resource) && CountFor(currentCounts, key) == 0) return resource;
+            }
+            return null;
+        }
+
+        private static bool IsStarterFloor(ForageResourceDefinition resource)
+        {
+            return resource != null && resource.WorldBand == ForageWorldBand.Starter &&
+                resource.Rarity == ForageResourceRarity.Common;
+        }
+
         public static void Record(IDictionary<string, int> counts, ForageResourceDefinition resource)
         {
             if (counts == null || resource == null || string.IsNullOrEmpty(resource.KnowledgeKey)) return;
             int existing = CountFor(counts, resource.KnowledgeKey);
             counts[resource.KnowledgeKey] = existing + 1;
+        }
+
+        // Mirrors Select's admission order so runtime diagnostics can distinguish a true
+        // density-weight rejection from an authored per-resource scene cap.
+        public static string DescribeNoSelection(IList<ForageResourceDefinition> candidates, IDictionary<string, int> currentCounts)
+        {
+            bool capped = false;
+            bool density = false;
+            if (candidates == null || candidates.Count == 0) return "no-candidates";
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                ForageResourceDefinition resource = candidates[i];
+                if (resource == null) continue;
+                if (CountFor(currentCounts, resource.KnowledgeKey) >= resource.MaxAutoNodesPerScene) capped = true;
+                else if (resource.DensityWeight <= 0) density = true;
+                else return "selected";
+            }
+            if (capped) return "cap";
+            if (density) return "density";
+            return "no-candidates";
         }
 
         private static int CountFor(IDictionary<string, int> counts, string key)
@@ -113,6 +162,16 @@ namespace ErenshorCraftingExpanded
             Record(counts, herb);
             if (counts["wild_herb"] != 1) return "FAIL resource count recording";
 
+            ForageResourceDefinition resin = ForageResourceCatalog.FindByKnowledgeKey("resin_sprig");
+            ForageResourceDefinition fiber = ForageResourceCatalog.FindByKnowledgeKey("field_fiber");
+            if (resin == null || fiber == null) return "FAIL Starter floor catalog";
+            List<ForageResourceDefinition> starterCandidates = new List<ForageResourceDefinition> { herb, resin, fiber };
+            ForageResourceDefinition second = Select(starterCandidates, counts, "Hidden Hills", 3, 1);
+            if (second != resin) return "FAIL Starter floor should include Resin Sprig";
+            Record(counts, resin);
+            ForageResourceDefinition third = Select(starterCandidates, counts, "Hidden Hills", 3, 2);
+            if (third != fiber) return "FAIL Starter floor should include Field Fiber";
+
             // Density cap is authority: once Herb reaches its cap, the remaining proven family wins.
             counts["wild_herb"] = herb.MaxAutoNodesPerScene;
             ForageResourceDefinition capped = Select(candidates, counts, "Hidden Hills", 3, 1);
@@ -121,6 +180,7 @@ namespace ErenshorCraftingExpanded
             counts["wild_bloom"] = bloom.MaxAutoNodesPerScene;
             if (Select(candidates, counts, "Hidden Hills", 3, 2) != null)
                 return "FAIL all capped resources should produce no selection";
+            if (DescribeNoSelection(candidates, counts) != "cap") return "FAIL cap diagnosis";
 
             Dictionary<string, int> none = new Dictionary<string, int>(StringComparer.Ordinal);
             ForageResourceDefinition a = Select(candidates, none, "Hidden Hills", 77, 2);

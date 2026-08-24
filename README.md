@@ -7,18 +7,16 @@ progression, a crafting-commission proof-of-concept, and a new Foraging gatherin
 mod-owned nodes (vanilla Mining and Fishing are untouched). See `docs/` for the full native-API
 research this mod is built against, and the top-level implementation plan for scope boundaries.
 
-## Status: Gather-interaction + retained-UI visual candidate (0.2.4)
+## Status: 0.2.5 forage-interaction polish candidate
 
-- **0.2.4 is the current retained-UI visual candidate.** It carries forward the 0.2.3 Foraging
-  interaction/transaction pass over the merged 0.2.2 loop. It does not
-  add resources or recipes. A confirmed resource left-click now starts a 1.25-second mod-owned channel
-  with the existing red world bar as progress, strict one-attempt inventory authority, deterministic
-  cancellation, exactly-once XP/discovery/successful depletion, native successful-loot sound, and brief
-  completion feedback. Ambiguous post-invoke inventory outcomes are quarantined separately and fail
-  closed instead of becoming automatic retry opportunities. The optional verified `StartLoot`/`EndLoot`
-  adapter remains OFF until a live rig/equipment audition. Crafting's retained drag/resize path also
-  adopts the current standalone camera-containment contract with runtime verification before patching
-  `CameraController.UsingUI()`.
+- **Source version 0.2.5 is the one-click RMB Foraging interaction-polish candidate.**
+  The live-proven exact-once gather transaction is preserved: one valid right-click captures the exact
+  forage node, starts the 1.0–1.5 second channel, and no longer requires a held mouse button or continued
+  hover/aim. Camera motion alone is harmless. Meaningful player movement, actual HP loss, range/true-LOS
+  loss, player death, scene/character change, incompatible UI ownership, unload, or a genuine conflicting
+  world interaction terminates the channel before any reward commit. The current content baseline remains
+  nine forage resources, eight processed components, sixteen stable recipe identities, the conservative
+  equipment-donor policy, and the 25-icon intent; this interaction pass does not weaken content safety.
 - **Native Lunaris plugin.** This version has been migrated off BepInEx 5 onto native Lunaris
   (`LunarisPlugin`/`[LunarisPlugin]`/`[LunarisPermission]`, native `Config`/`Logging`). This is a
   loader/config/logging/lifecycle migration only — no gameplay behavior, recipe logic, Foraging
@@ -64,22 +62,24 @@ research this mod is built against, and the top-level implementation plan for sc
   The explicit `EnablePoCNode`/debug-placeholder path is
   still developer-only and is no longer the normal auto-placement switch. This revised slice needs
   the live acceptance pass in `docs/FIRST_RUNTIME_TEST.md`; no offline result is presented as live.
-- **Foraging now has a compact five-resource catalog with strict evidence gates.** Wild Herb is the
-  live-proven Foraging-1 outdoor baseline. Cave Mushroom (Foraging 8) and Cave Moss (Foraging 24)
-  remain OFF-by-default covered-resource experiments. Wild Bloom (Foraging 14) is an open-area
-  family that requires explicit flower/bloom item and scene-mesh evidence. Blightroot (Foraging 36)
-  is regional to `The Blight` and requires explicit root/briar evidence. Every gather yields one;
-  missing item/mesh/region evidence fails closed instead of substituting a fern, rock, or debug sphere.
-  One bounded renderer scan services the enabled visual families, and covered classification rejects
-  obvious tree/foliage canopy.
-- **Production native content is now a six-slot runtime-bound catalog, still OFF by default.** Stable
-  owned Template IDs `910100010`, `011`, `012`, `013`, `015`, and `016` represent Crafting milestones
-  1/3/5/8/18/25. Three early utility slots require Wild Herb discovery and add 1/1/2 Wild Herb to a
-  conservative packaged native donor recipe; foundation slots add one extra low-value donor ingredient.
-  Exact native donors/outputs are selected only from the current live packaged ItemDB and persisted by
-  exact fingerprints. `Crafting.Experimental/EnableProductionNativeRecipes=false` keeps this catalog
-  inert until the installed build passes the documented native Smithing lifecycle test. Native
-  `Smithing.Combine()` / `DoSuccess()` remain the only ingredient-consumption and result authority.
+- **Foraging now has a nine-resource ecology with strict evidence gates.** Wild Herb (Foraging 1),
+  Field Fiber (3), Resin Sprig (6), Cave Mushroom (8), Wild Bloom (14), Starleaf (18), Cave Moss (24),
+  Ghostcap (30), and Blightroot (36) form the raw progression. Open families require matching current-scene
+  visual/environment evidence; covered resources require matching fungus/moss evidence and the normal
+  `EnableCoveredResources=true` setting; Blightroot additionally requires exact regional eligibility for
+  `The Blight`. Every gather yields one. Missing item/mesh/environment/region evidence fails closed instead
+  of substituting unrelated scenery. Scene visual discovery remains cached/bounded rather than per-frame.
+- **The default-on major content path is separate from the older six-slot runtime-bound experiment.**
+  `Crafting/EnableExpandedContent=true` registers stable 91001xxxx component and 91002xxxx equipment
+  identities plus sixteen 910110xxx Template identities. Recipes form a raw -> processed -> gear progression
+  and still delegate ingredient validation, consumption, fuel handling, and output creation to native
+  `Smithing.Combine()` / `Smithing.DoSuccess()`. The older six-slot `EnableProductionNativeRecipes` catalog
+  remains OFF by default and is retained only as the earlier experimental/runtime-bound path.
+- **Inventory artwork is now mod-owned and manifest-backed for implemented content.** Twenty-five square
+  transparent PNG icons ship under `assets/icons/`; `assets/item-art-manifest.json` records stable item ID,
+  display name, category, tier/rarity, visual description, path, and fallback behavior. Runtime loading uses
+  current Unity image types through cached reflection; a missing/invalid icon safely retains the verified
+  native donor icon instead of making item registration fail.
 - **The single-template verification experiment remains separate.**
   `Crafting.Experimental/ExperimentalNativeRecipeRegistration=false`, `/craftdiag recipe candidates`,
   `trial register`, and `trial grant` remain developer-only tools for proving the current native path;
@@ -115,14 +115,15 @@ research this mod is built against, and the top-level implementation plan for sc
 
 ## Installation
 
-**0.2.4 is the current release candidate.** It carries forward the 0.2.3 gather-interaction and
-transaction work rather than replacing it, so 0.2.3 notes below remain accurate as history — but the
-gate that matters is 0.2.4's. Live validation for this candidate is driven by the suite-level ordered
-matrix in `Erenshor-Mod-Suite/docs/LIVE_TEST_MATRIX.md`, which supersedes stale individual-workstream
-test instructions when there is a conflict. Historical 0.2.3 evidence is not live proof for 0.2.4:
-the exact 0.2.4 candidate must be rebuilt, installed, and run before any row is certified.
+The source version is **0.2.5** and remains **not release-ready from static evidence alone**. The
+underlying 0.2.4 forage reward transaction has current live proof for successful grant → XP → depletion;
+0.2.5 changes only the player-facing interaction/channel interruption and highlight ownership around that
+transaction. Expanded-content donor/forge/equipment behavior still keeps its existing evidence gates and
+must be live-tested separately where prior runtime proof is incomplete.
 
-Native production recipes remain fail-closed and OFF until proven live; that gate is unchanged.
+The older six-slot native-production experiment remains fail-closed and OFF. The new sixteen-recipe
+expanded-content path is separately gated by `EnableExpandedContent` and by current live ItemDB/forge
+capability checks.
 
 This is a **native Lunaris plugin** — BepInEx is no longer required for this version. Requires
 Lunaris installed in your Erenshor install. The compiled DLL is placed directly in
@@ -157,6 +158,7 @@ visible so the player cannot be stranded.
 |---|---|---|---|
 | General | EnableMod | true | Master gameplay switch. When false, crafting/foraging behavior is disabled, but installed custom item identities still register so existing owned resource/template save entries can resolve safely while the plugin remains loaded. |
 | Crafting | CraftHotkey | None (unbound) | Key that performs one Craft action while the forge window is open and chat isn't focused. |
+| Crafting | EnableExpandedContent | true | Enables the Forgotten Roads raw-resource → processed-component → crafted-equipment progression. Stable item identities still register while disabled so existing saves can resolve them safely. |
 | Crafting.Experimental | ExperimentalNativeRecipeRegistration | false | Developer-only single-template lifecycle experiment. Keep OFF for normal play. |
 | Crafting.Experimental | EnableProductionNativeRecipes | false | Enables the six stable runtime-bound production recipe slots only after current-build native lifecycle proof. OFF by default. |
 | Commissions | EnableCraftingRequests | false | Experimental PoC: let local Sims offer a single crafting commission. |
@@ -166,32 +168,44 @@ visible so the player cannot be stranded.
 | UI | PanelX / PanelY | -1 | Normalized retained-panel position; invalid/legacy values recover to a safe default. |
 | Foraging | EnableForaging | true | Enable Foraging. Curated entries win; scenes without curated entries use the conservative 1–3-cluster resource selection/auto-placement path with level, environment, region, item, and visual evidence gates. |
 | Foraging | EnablePoCNode | false | Developer-only switch for the separate survey/PoC candidate. Production authored nodes do not depend on it. |
-| Foraging | ForageKey | None | Legacy compatibility field only. Production Foraging is left-click-to-gather and does not read this binding. |
-| Foraging | ForagingInteractionRange | 3.5 | Max distance (world units) to gather a node. Mod-owned value; no native constant found. |
+| Foraging | ForageKey | None | Legacy compatibility field only. Production Foraging uses one valid right-click on the exact resource target and does not read this binding. |
+| Foraging | ForagingInteractionRange | 4.25 | Max distance (world units) to gather a node. Mod-owned conservative usability value; no native gather-range constant was found. |
 | Foraging | GatherDurationSeconds | 1.25 | Mod-owned gather channel duration. Runtime-normalized to the production 1.0–1.5 second range. |
 | Foraging.Experimental | UseNativeGatherAnimation | false | Optional verified `StartLoot`/`EndLoot` trigger adapter. Keep OFF until a live rig/equipment audition confirms the pose is appropriate. Reward authority never depends on animation. |
-| Foraging.Experimental | ExperimentalCoveredResources | false | Enables the OFF-by-default covered families (Cave Mushroom/Cave Moss). Each still requires strict matching native-item and current-scene visual evidence. |
+| Foraging | EnableCoveredResources | true | Enables Cave Mushroom, Cave Moss, and Ghostcap when the current scene supplies explicit matching fungus/moss visual evidence. No covered resource is placed from a scene-name guess alone. |
+| Foraging.Experimental | ExperimentalCoveredResources | legacy only | 0.2.x migration key retained for compatibility; `EnableCoveredResources` is authoritative. |
 | Foraging.Dev | ForagingScanRadius | 12 | Radius `/craftdiag forage scan` searches. Development diagnostic only. |
 | Foraging.Dev | ForagingDebugRespawnSeconds | 0 | If > 0, overrides node respawn time for fast iteration testing. Leave 0 for normal play. |
 | Foraging.Dev | AllowDebugPlaceholderVisual | false | Development-only placeholder-sphere fallback. Leave off. |
 
 ### Foraging interaction and presentation
 
-### Gather transaction feedback (introduced 0.2.3, current in 0.2.4)
+### Gather transaction feedback (exact-once transaction from 0.2.4; RMB channel in 0.2.5)
 
-A confirmed in-range left-click now starts a **1.25-second mod-owned gather transaction** instead of instantly removing the plant. The existing red world resource bar drains left-to-right while the player remains free to orbit the camera. Meaningful movement, range/LOS loss, jump/fall, damage, typing, zoning, character change, gameplay disable, unload, or a different-resource click cancels the current gather without awarding anything. Re-clicking the same active herb is consumed/ignored and does not restart the timer.
+A confirmed in-range **right-click once** starts the **1.25-second mod-owned gather transaction**.
+The physical mouse button does not own the duration: releasing RMB and moving the camera do not cancel.
+The exact captured node/token remains authoritative until completion or a meaningful interruption. A
+player displacement greater than 0.10 world units from the captured starting point, an actual local-player
+HP decrease, range loss, a genuine world LOS blocker, player death, typing/conflicting UI ownership,
+scene/character change, gameplay disable/unload, or a deliberate non-forage world RMB cancels without
+awarding anything. Another forage RMB cannot steal or restart the active transaction.
 
 The reward path is strict and exactly-once: Foraging selects one normal native `AddItemToInv` overload and invokes it at most once, with **no `ForceItemToInv` fallback**. Verified rejection restores the node; only a verified success commits discovery/XP and successful depletion. An exception or unverifiable return after the native inventory invocation begins is quarantined character-locally for one respawn window so zoning/restarting cannot create an automatic duplicate opportunity, but it does not claim XP/discovery or successful depletion. Successful grants play the verified native `Misc.DropItem` sound, then a brief ~0.15-second nameplate/bar scale/fade completes independently of reward authority.
 
 `UseNativeGatherAnimation` is intentionally OFF by default. When explicitly enabled it issues verified `StartLoot` on begin and guarantees `EndLoot` on every terminal path, but the 1.25-second mod transaction—not an animation event—remains authoritative.
 
-Foraging owns a small trigger hit target for each spawned resource. It does **not** attach native
-`MiningNode` gameplay. Production interaction is **left-click the resource**: a bounded non-alloc
-pointer ray runs at the proven native `PlayerControl.LeftClick` boundary and must hit that exact mod-owned target. There is no keyboard or nearest-
-node fallback, so native Erenshor bindings (including the Guild menu on G) are not stolen. Pointer
-interaction is suppressed while chat/UI owns the pointer. Character progression readiness is resolved
-directly from the proven local player/save-slot identity fields and is no longer gated on unrelated
-Suite UI/Sim-group managers.
+Foraging owns a non-blocking trigger hit target for each spawned resource. It does **not** attach native
+`MiningNode` gameplay. Production interaction is **right-click the resource once**: a bounded non-alloc
+pointer ray runs at the current native `PlayerControl.RightClick` boundary and must hit that exact
+mod-owned target. Crafting consumes only that valid forage RMB edge; non-forage RMB and UI-owned RMB
+remain native. There is no keyboard or nearest-node fallback. After the click is released, temporary
+camera/input ownership is released while the channel continues, so harmless camera motion is not
+transaction authority. Character progression readiness is resolved directly from the proven local
+player/save-slot identity fields and is no longer gated on unrelated Suite UI/Sim-group managers.
+
+Idle forage nodes no longer carry a persistent selection ring. Hover may show only the restrained inner
+targeting cue. A selected/gathering node owns the stronger two-ring cue plus progress presentation, and
+every terminal path clears that selection state before normal hover can reacquire.
 
 The Wild Herb presentation is a compact three-clump native-vegetation patch. Its detached world-space
 nameplate places the yellow resource name **inside the red availability bar** and geometrically keeps
@@ -314,7 +328,7 @@ The current source replaces the Crafting player panel with retained Unity uGUI, 
 This development branch now combines the three parallel profession workstreams:
 
 - **Crafting 1-50** remains per-character and observes successful native Smithing crafts.
-- **Foraging 1-50** is a separate per-character gathering skill. Current milestones are Wild Herb 1, Cave Mushroom 8 (experimental), Wild Bloom 14, Cave Moss 24 (experimental), and regional Blightroot 36; every non-baseline family remains fail-closed without its explicit runtime item/visual evidence.
+- **Foraging 1-50** is a separate per-character gathering skill. Current milestones are Wild Herb 1, Field Fiber 3, Resin Sprig 6, Cave Mushroom 8, Wild Bloom 14, Starleaf 18, Cave Moss 24, Ghostcap 30, and regional Blightroot 36; every family remains fail-closed without the item/scene evidence its catalog entry requires.
 - **Resource discovery** is permanent per character and is the discovery authority used by future recipe unlock predicates.
 - **Known recipes** are permanent per-character knowledge owned by the recipe-ownership layer, separate from the physical native Template item.
 - Physical recipe Templates use defensive `PlayerCannotSell` + `NoTradeNoDestroy` + zero-value policy when the owned custom Template exists.
@@ -324,8 +338,9 @@ This development branch now combines the three parallel profession workstreams:
 
 ### Important current gate
 
-Six stable production recipe slots are implemented as a runtime-bound catalog, but
-`EnableProductionNativeRecipes` remains OFF by default until the installed build proves the full
-Template registration/use/save/reload/disable lifecycle. The separate
-`ExperimentalNativeRecipeRegistration` path remains a one-template developer verification tool.
-Stable Template IDs must never be silently rebound to different native outputs after players can own them.
+The **six older runtime-bound production slots** remain an OFF-by-default compatibility/experiment path.
+The **sixteen expanded-content recipes** are a separate default-on progression and use stable Template IDs
+`910110001` through `910110016`; they activate only when their mod-owned ingredients/outputs resolve and the
+live forge exposes sufficient component capacity. The separate `ExperimentalNativeRecipeRegistration` path
+remains a one-template developer verification tool. Stable Template IDs must never be silently rebound to
+different outputs after players can own them.

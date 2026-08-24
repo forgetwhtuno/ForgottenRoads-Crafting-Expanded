@@ -54,7 +54,7 @@ namespace ErenshorCraftingExpanded
 // Learning/granting a new physical template waits until this exact Template has
                 // passed current-session native registration. Existing permanent knowledge is
                 // retained even while a saved identity is temporarily inert.
-                if (!ProductionNativeRecipeRegistry.IsRegisteredCurrentSession(recipe.TemplateItemId)) continue;
+                if (!CraftingRecipeRuntimeRegistry.IsRegisteredCurrentSession(recipe.TemplateItemId)) continue;
                 int foragingLevel = ForagingKnowledge.IsReady ? ForagingKnowledge.CurrentLevel : 1;
                 if (!RecipeAccessPolicy.CanLearn(progress.Level, foragingLevel, recipe, ForagingDiscoveries)) continue;
 
@@ -75,7 +75,7 @@ namespace ErenshorCraftingExpanded
         internal static bool IsRecipeAllowedForCurrentCharacter(CustomRecipeDefinition recipe)
         {
             return recipe != null &&
-                ProductionNativeRecipeRegistry.IsRegisteredCurrentSession(recipe.TemplateItemId) &&
+                CraftingRecipeRuntimeRegistry.IsRegisteredCurrentSession(recipe.TemplateItemId) &&
                 CraftingController.CharacterScopeResolved &&
                 RecipeAccessPolicy.CanUse(RecipeOwnershipApi.IsKnown(recipe.RecipeKey), true, CraftingController.Progress.Level,
                     ForagingKnowledge.IsReady ? ForagingKnowledge.CurrentLevel : 1, recipe, ForagingDiscoveries);

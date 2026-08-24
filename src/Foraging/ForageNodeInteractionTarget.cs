@@ -7,7 +7,7 @@ namespace ErenshorCraftingExpanded
     internal sealed class ForageNodeInteractionTarget : MonoBehaviour
     {
         internal SpawnedForageNode Node;
-        internal SphereCollider HitCollider;
+        internal Collider HitCollider;
 
         internal void SetAvailable(bool available)
         {

@@ -4,17 +4,35 @@ using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace ErenshorCraftingExpanded
 {
     // Crafting-owned camera containment. Installation is manual and fail-closed: the current
     // CameraController IL shape is re-proved before Harmony is allowed to touch UsingUI().
-    // The postfix itself is monotonic and can only promote false -> true for an active
-    // Crafting-owned drag/resize gesture.
+    // The postfixes are monotonic and can only promote false -> true for an active
+    // Crafting-owned retained-UI or captured-forage pointer gesture.
     internal static class CraftingCameraUiOwnershipPatch
     {
+        private static bool _installed;
+        private static float _lastNativeUsingUiTrueAt = -999f;
+
+        internal static bool IsInstalled { get { return _installed; } }
+
+        internal static bool NativeUiRecentlyActive(float now)
+        {
+            return now <= _lastNativeUsingUiTrueAt + 0.20f;
+        }
+
+        internal static void ResetRuntimeState()
+        {
+            _installed = false;
+            _lastNativeUsingUiTrueAt = -999f;
+        }
+
         internal static bool TryInstall(Harmony harmony, out string diagnostic)
         {
+            ResetRuntimeState();
             diagnostic = "not-checked";
             if (harmony == null)
             {
@@ -23,8 +41,9 @@ namespace ErenshorCraftingExpanded
             }
 
             MethodInfo usingUi;
+            MethodInfo mouseLook;
             string proof;
-            if (!CraftingCameraUiCompatibility.TryVerify(out usingUi, out proof))
+            if (!CraftingCameraUiCompatibility.TryVerify(out usingUi, out mouseLook, out proof))
             {
                 diagnostic = proof;
                 return false;
@@ -32,27 +51,51 @@ namespace ErenshorCraftingExpanded
 
             try
             {
-                MethodInfo postfix = typeof(CraftingCameraUiOwnershipPatch).GetMethod(
-                    "Postfix", BindingFlags.Static | BindingFlags.NonPublic);
-                if (postfix == null)
+                MethodInfo usingUiPostfix = typeof(CraftingCameraUiOwnershipPatch).GetMethod(
+                    "UsingUiPostfix", BindingFlags.Static | BindingFlags.NonPublic);
+                MethodInfo mouseLookPrefix = typeof(CraftingCameraUiOwnershipPatch).GetMethod(
+                    "MouseLookPrefix", BindingFlags.Static | BindingFlags.NonPublic);
+                if (usingUiPostfix == null || mouseLookPrefix == null)
                 {
-                    diagnostic = "postfix method unavailable";
+                    diagnostic = "ownership patch method unavailable";
                     return false;
                 }
-                harmony.Patch(usingUi, null, new HarmonyMethod(postfix));
+
+                // Keep the capture narrow. DraggingUIElement + UsingUI contain CameraController
+                // only for the initiating forage RMB press, while PlayerControl.MouseLook is
+                // skipped during that short ownership window. We intentionally do NOT globally
+                // force EventSystem pointer ownership because that same gate also protects
+                // LandMovement/WaterMovement; once the selecting RMB is released the channel
+                // continues without camera/input ownership so real movement can interrupt it.
+                harmony.Patch(usingUi, null, new HarmonyMethod(usingUiPostfix));
+                harmony.Patch(mouseLook, new HarmonyMethod(mouseLookPrefix), null);
+                _installed = true;
                 diagnostic = proof;
                 return true;
             }
             catch (Exception ex)
             {
+                _installed = false;
                 diagnostic = "patch failed: " + ex.GetType().Name;
                 return false;
             }
         }
 
-        private static void Postfix(ref bool __result)
+        private static void UsingUiPostfix(ref bool __result)
         {
-            __result = CraftingCameraUiPolicy.PromoteUsingUi(__result, CraftingUiPointerOwnership.HasOwners);
+            // Preserve the raw native answer before monotonic promotion. This lets a captured
+            // forage interaction detect a real open native UI without detecting its own claim.
+            bool nativeUsingUi = __result;
+            if (nativeUsingUi)
+            {
+                try { _lastNativeUsingUiTrueAt = Time.unscaledTime; } catch { }
+            }
+            __result = CraftingCameraUiPolicy.PromoteUsingUi(nativeUsingUi, CraftingUiPointerOwnership.HasOwners);
+        }
+
+        private static bool MouseLookPrefix()
+        {
+            return !ForageNodeController.OwnsCapturedPointerInput;
         }
     }
 
@@ -60,10 +103,11 @@ namespace ErenshorCraftingExpanded
     {
         private static readonly Dictionary<short, OpCode> OpCodesByValue = BuildOpCodeTable();
 
-        internal static bool TryVerify(out MethodInfo usingUi, out string diagnostic)
+        internal static bool TryVerify(out MethodInfo usingUi, out MethodInfo mouseLook, out string diagnostic)
         {
             usingUi = null;
-            diagnostic = "camera containment compatibility not verified";
+            mouseLook = null;
+            diagnostic = "camera/input containment compatibility not verified";
             try
             {
                 Type cameraType = typeof(CameraController);
@@ -71,15 +115,15 @@ namespace ErenshorCraftingExpanded
                 BindingFlags staticFlags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
                 usingUi = cameraType.GetMethod("UsingUI", instanceFlags, null, Type.EmptyTypes, null);
-                if (!ExactMethod(usingUi, cameraType, typeof(bool))) return Fail(out usingUi, out diagnostic, "UsingUI shape mismatch");
+                if (!ExactMethod(usingUi, cameraType, typeof(bool))) return Fail(out usingUi, out mouseLook, out diagnostic, "UsingUI shape mismatch");
 
                 FieldInfo uiWindows = cameraType.GetField("UIWindows", instanceFlags);
                 if (uiWindows == null || uiWindows.DeclaringType != cameraType || uiWindows.FieldType != typeof(List<GameObject>))
-                    return Fail(out usingUi, out diagnostic, "UIWindows shape mismatch");
+                    return Fail(out usingUi, out mouseLook, out diagnostic, "UIWindows shape mismatch");
 
                 MethodInfo activeSelf = typeof(GameObject).GetProperty("activeSelf", BindingFlags.Instance | BindingFlags.Public).GetGetMethod();
                 if (activeSelf == null || !References(usingUi, uiWindows) || !References(usingUi, activeSelf))
-                    return Fail(out usingUi, out diagnostic, "UsingUI no longer scans UIWindows.activeSelf");
+                    return Fail(out usingUi, out mouseLook, out diagnostic, "UsingUI no longer scans UIWindows.activeSelf");
 
                 MethodInfo update = cameraType.GetMethod("Update", instanceFlags, null, Type.EmptyTypes, null);
                 MethodInfo modern = cameraType.GetMethod("ModernControls", instanceFlags, null, Type.EmptyTypes, null);
@@ -87,31 +131,51 @@ namespace ErenshorCraftingExpanded
                 if (!ExactMethod(update, cameraType, typeof(void)) ||
                     !ExactMethod(modern, cameraType, typeof(void)) ||
                     !ExactMethod(controls, cameraType, typeof(void)))
-                    return Fail(out usingUi, out diagnostic, "camera control method shape mismatch");
+                    return Fail(out usingUi, out mouseLook, out diagnostic, "camera control method shape mismatch");
 
                 if (!References(update, modern))
-                    return Fail(out usingUi, out diagnostic, "Update no longer references ModernControls");
+                    return Fail(out usingUi, out mouseLook, out diagnostic, "Update no longer references ModernControls");
                 if (!References(modern, usingUi))
-                    return Fail(out usingUi, out diagnostic, "ModernControls no longer references UsingUI");
+                    return Fail(out usingUi, out mouseLook, out diagnostic, "ModernControls no longer references UsingUI");
 
                 FieldInfo releaseMouse = cameraType.GetField("releaseMouse", instanceFlags);
                 if (releaseMouse == null || releaseMouse.DeclaringType != cameraType || releaseMouse.FieldType != typeof(bool) || !References(modern, releaseMouse))
-                    return Fail(out usingUi, out diagnostic, "ModernControls releaseMouse boundary mismatch");
+                    return Fail(out usingUi, out mouseLook, out diagnostic, "ModernControls releaseMouse boundary mismatch");
 
                 MethodInfo getAxis = typeof(Input).GetMethod("GetAxis", staticFlags, null, new Type[] { typeof(string) }, null);
                 if (getAxis == null || !References(modern, getAxis))
-                    return Fail(out usingUi, out diagnostic, "ModernControls mouse-axis boundary mismatch");
+                    return Fail(out usingUi, out mouseLook, out diagnostic, "ModernControls mouse-axis boundary mismatch");
 
                 FieldInfo dragging = typeof(GameData).GetField("DraggingUIElement", staticFlags);
                 if (dragging == null || dragging.FieldType != typeof(bool) || !References(controls, dragging))
-                    return Fail(out usingUi, out diagnostic, "standard Controls drag boundary mismatch");
+                    return Fail(out usingUi, out mouseLook, out diagnostic, "standard Controls drag boundary mismatch");
 
-                diagnostic = "verified CameraController.UsingUI/UIWindows + modern/standard input boundaries";
+                MethodInfo pointerOverUi = typeof(EventSystem).GetMethod(
+                    "IsPointerOverGameObject", instanceFlags, null, Type.EmptyTypes, null);
+                if (!ExactMethod(pointerOverUi, typeof(EventSystem), typeof(bool)))
+                    return Fail(out usingUi, out mouseLook, out diagnostic, "EventSystem.IsPointerOverGameObject shape mismatch");
+
+                Type playerControlType = typeof(PlayerControl);
+                MethodInfo leftClick = UniqueNamedVoidMethod(playerControlType, "LeftClick", instanceFlags);
+                MethodInfo rightClick = UniqueNamedVoidMethod(playerControlType, "RightClick", instanceFlags);
+                mouseLook = UniqueNamedVoidMethod(playerControlType, "MouseLook", instanceFlags);
+                if (leftClick == null || rightClick == null || mouseLook == null)
+                    return Fail(out usingUi, out mouseLook, out diagnostic, "PlayerControl pointer method shape/uniqueness mismatch");
+                if (!References(leftClick, pointerOverUi) ||
+                    !References(rightClick, pointerOverUi) ||
+                    !References(mouseLook, pointerOverUi))
+                    return Fail(out usingUi, out mouseLook, out diagnostic, "PlayerControl pointer UI gate relationship changed");
+                if (!References(update, pointerOverUi) ||
+                    !References(controls, pointerOverUi) ||
+                    !References(modern, pointerOverUi))
+                    return Fail(out usingUi, out mouseLook, out diagnostic, "CameraController pointer UI gate relationship changed");
+
+                diagnostic = "verified CameraController.UsingUI/UIWindows, EventSystem pointer gate, PlayerControl LeftClick/RightClick/MouseLook, and modern/standard camera boundaries; global EventSystem gate is not patched";
                 return true;
             }
             catch (Exception ex)
             {
-                return Fail(out usingUi, out diagnostic, "verification exception: " + ex.GetType().Name);
+                return Fail(out usingUi, out mouseLook, out diagnostic, "verification exception: " + ex.GetType().Name);
             }
         }
 
@@ -120,9 +184,25 @@ namespace ErenshorCraftingExpanded
             return method != null && method.DeclaringType == declaringType && method.ReturnType == returnType && method.GetParameters().Length == 0;
         }
 
-        private static bool Fail(out MethodInfo usingUi, out string diagnostic, string reason)
+        private static MethodInfo UniqueNamedVoidMethod(Type type, string name, BindingFlags flags)
+        {
+            if (type == null || string.IsNullOrEmpty(name)) return null;
+            MethodInfo found = null;
+            MethodInfo[] methods = type.GetMethods(flags);
+            for (int i = 0; i < methods.Length; i++)
+            {
+                MethodInfo method = methods[i];
+                if (method == null || method.DeclaringType != type || method.ReturnType != typeof(void) || method.Name != name) continue;
+                if (found != null) return null;
+                found = method;
+            }
+            return found;
+        }
+
+        private static bool Fail(out MethodInfo usingUi, out MethodInfo mouseLook, out string diagnostic, string reason)
         {
             usingUi = null;
+            mouseLook = null;
             diagnostic = reason;
             return false;
         }

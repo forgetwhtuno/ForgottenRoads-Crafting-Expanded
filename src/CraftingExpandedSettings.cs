@@ -35,7 +35,10 @@ namespace ErenshorCraftingExpanded
         [Config("ExperimentalNativeRecipeRegistration", "Crafting.Experimental", "Developer-only single-template lifecycle experiment. Leave OFF for normal play.")]
         public bool ExperimentalNativeRecipeRegistration = false;
 
-        [Config("EnableProductionNativeRecipes", "Crafting.Experimental", "Enable the runtime-bound production native recipe catalog. OFF by default until the current installed build passes the documented native Smithing lifecycle test.")]
+        [Config("EnableExpandedContent", "Crafting", "Enable the Forgotten Roads resource-processing and crafted-equipment progression. Uses mod-owned Item identities and native Smithing templates once the live forge shape is verified.")]
+        public bool EnableExpandedContent = true;
+
+        [Config("EnableProductionNativeRecipes", "Crafting.Experimental", "Enable the older runtime-bound native-donor recipe experiment. The new Forgotten Roads content does not require this switch.")]
         public bool EnableProductionNativeRecipes = false;
 
         [Config("EnableCraftingRequests", "Commissions", "Enable the experimental local-Sim crafting commission proof of concept.")]
@@ -69,12 +72,15 @@ namespace ErenshorCraftingExpanded
         public KeyCode ForageKey = KeyCode.None;
 
         [Config("ForagingInteractionRange", "Foraging", "Maximum player distance in world units for an eligible gather.")]
-        public float ForagingInteractionRange = 3.5f;
+        public float ForagingInteractionRange = 4.25f;
 
         [Config("GatherDurationSeconds", "Foraging", "Short mod-owned gather channel duration in seconds. Production values are clamped to 1.0-1.5 seconds.")]
         public float GatherDurationSeconds = 1.25f;
 
-        [Config("ExperimentalCoveredResources", "Foraging.Experimental", "OFF-by-default covered/cave resource family. Requires explicit fungus item and scene-mesh evidence.")]
+        [Config("EnableCoveredResources", "Foraging", "Enable cave/covered resource families when the current scene provides explicit matching fungus/moss visual evidence.")]
+        public bool EnableCoveredResources = true;
+
+        [Config("ExperimentalCoveredResources", "Foraging.Experimental", "Legacy 0.2.x setting retained for migration only. EnableCoveredResources is authoritative.")]
         public bool ExperimentalCoveredResources = false;
 
         [Config("ForagingScanRadius", "Foraging.Dev", "Radius used only by explicit forage asset diagnostics.")]
@@ -95,6 +101,7 @@ namespace ErenshorCraftingExpanded
         internal static CraftingExpandedConfigEntry<bool> EnableMod;
         internal static CraftingExpandedConfigEntry<KeyCode> CraftHotkey;
         internal static CraftingExpandedConfigEntry<bool> ExperimentalNativeRecipeRegistration;
+        internal static CraftingExpandedConfigEntry<bool> EnableExpandedContent;
         internal static CraftingExpandedConfigEntry<bool> EnableProductionNativeRecipes;
         internal static CraftingExpandedConfigEntry<bool> EnableCraftingRequests;
         internal static CraftingExpandedConfigEntry<bool> ShowCraftingToggle;
@@ -110,6 +117,7 @@ namespace ErenshorCraftingExpanded
             EnableMod = new CraftingExpandedConfigEntry<bool>(delegate { return settings.EnableMod; }, delegate(bool value) { settings.EnableMod = value; });
             CraftHotkey = new CraftingExpandedConfigEntry<KeyCode>(delegate { return settings.CraftHotkey; }, delegate(KeyCode value) { settings.CraftHotkey = value; });
             ExperimentalNativeRecipeRegistration = new CraftingExpandedConfigEntry<bool>(delegate { return settings.ExperimentalNativeRecipeRegistration; }, delegate(bool value) { settings.ExperimentalNativeRecipeRegistration = value; });
+            EnableExpandedContent = new CraftingExpandedConfigEntry<bool>(delegate { return settings.EnableExpandedContent; }, delegate(bool value) { settings.EnableExpandedContent = value; });
             EnableProductionNativeRecipes = new CraftingExpandedConfigEntry<bool>(delegate { return settings.EnableProductionNativeRecipes; }, delegate(bool value) { settings.EnableProductionNativeRecipes = value; });
             EnableCraftingRequests = new CraftingExpandedConfigEntry<bool>(delegate { return settings.EnableCraftingRequests; }, delegate(bool value) { settings.EnableCraftingRequests = value; });
             ShowCraftingToggle = new CraftingExpandedConfigEntry<bool>(delegate { return settings.ShowCraftingToggle; }, delegate(bool value) { settings.ShowCraftingToggle = value; });
@@ -144,7 +152,7 @@ namespace ErenshorCraftingExpanded
             ForageKey = new CraftingExpandedConfigEntry<KeyCode>(delegate { return settings.ForageKey; }, delegate(KeyCode value) { settings.ForageKey = value; });
             InteractionRange = new CraftingExpandedConfigEntry<float>(delegate { return settings.ForagingInteractionRange; }, delegate(float value) { settings.ForagingInteractionRange = value; });
             GatherDurationSeconds = new CraftingExpandedConfigEntry<float>(delegate { return settings.GatherDurationSeconds; }, delegate(float value) { settings.GatherDurationSeconds = value; });
-            ExperimentalCoveredResources = new CraftingExpandedConfigEntry<bool>(delegate { return settings.ExperimentalCoveredResources; }, delegate(bool value) { settings.ExperimentalCoveredResources = value; });
+            ExperimentalCoveredResources = new CraftingExpandedConfigEntry<bool>(delegate { return settings.EnableCoveredResources; }, delegate(bool value) { settings.EnableCoveredResources = value; });
             ScanRadius = new CraftingExpandedConfigEntry<float>(delegate { return settings.ForagingScanRadius; }, delegate(float value) { settings.ForagingScanRadius = value; });
             DebugRespawnSecondsOverride = new CraftingExpandedConfigEntry<float>(delegate { return settings.ForagingDebugRespawnSeconds; }, delegate(float value) { settings.ForagingDebugRespawnSeconds = value; });
             AllowDebugPlaceholderVisual = new CraftingExpandedConfigEntry<bool>(delegate { return settings.AllowDebugPlaceholderVisual; }, delegate(bool value) { settings.AllowDebugPlaceholderVisual = value; });

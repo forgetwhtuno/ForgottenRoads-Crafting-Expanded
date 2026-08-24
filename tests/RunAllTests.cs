@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using ErenshorCraftingExpanded;
 
 internal static class RunAllTests
@@ -53,9 +53,12 @@ internal static class RunAllTests
             ForageGatherTransactionTests.Run(),
             ForagingInventoryGrantPolicy.RunSelfTests(),
             ForageGatherCancellationPolicy.RunSelfTests(),
+            ForageGatherChannelPolicy.RunSelfTests(),
+            ForageInteractionCaptureState.RunSelfTests(),
             ForageCombatEligibilityPolicy.RunSelfTests(),
             ForageActiveGatherClickPolicy.RunSelfTests(),
             ForageInteractionPolicy.RunSelfTests(),
+            ForageHighlightPolicy.RunSelfTests(),
             ForageDepletionLedger.RunSelfTests(),
             ForageAmbiguousGrantQuarantine.RunSelfTests(),
             ForagingCharacterKey.RunSelfTests(),
@@ -71,12 +74,20 @@ internal static class RunAllTests
             ForagingScanPolicy.RunSelfTests(),
             ForagePlacementPolicy.RunSelfTests(),
             ForageEnvironmentPolicy.RunSelfTests(),
+            WorldThreatPolicy.RunSelfTests(),
             ForageResourceCatalog.RunSelfTests(),
             ForageResourceSelectionPolicy.RunSelfTests(),
             ForageResourceAvailabilityPolicy.RunSelfTests(),
             ResourceObtainabilityCatalog.RunSelfTests(),
             ForageVisualPolicy.RunSelfTests(),
+            ExpandedEquipmentDonorPolicy.RunSelfTests(),
+            ItemSemanticsPolicy.RunSelfTests(),
+            NativeConsumablePolicy.RunSelfTests(),
+            ConsumableEconomyPolicy.RunSelfTests(),
 
+            ExpandedContentItems.RunSelfTests(),
+            ExpandedContentRecipes.RunSelfTests(),
+            ItemIconAssetLoader.RunSelfTests(),
             OrganicItemBasePolicy.RunSelfTests(),
             CustomItemRegistry.RunSelfTests()
         };

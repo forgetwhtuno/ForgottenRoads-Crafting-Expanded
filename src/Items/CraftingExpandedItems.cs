@@ -4,8 +4,8 @@ using HarmonyLib;
 namespace ErenshorCraftingExpanded
 {
     // Central catalog for this mod's custom Foraging materials. Wild Herb is the live-verified
-    // baseline. Every later family has a distinct safe ItemDB donor policy; covered families remain
-    // behind ExperimentalCoveredResources and all specialized world nodes still require truthful
+    // baseline. Every later family has a distinct safe ItemDB donor policy; covered families use the
+    // current EnableCoveredResources setting and all specialized world nodes still require truthful
     // matching current-scene visual evidence before placement.
     internal static class CraftingExpandedItems
     {
@@ -23,6 +23,9 @@ namespace ErenshorCraftingExpanded
                 Value = 1,
                 DefaultGrantQuantity = 1,
                 VisualKind = CustomItemVisualKind.OrganicHerb,
+                Category = "resource/herb", Tier = 1, Rarity = "common",
+                IconAssetPath = "assets/icons/wild_herb.png",
+                IconDescription = "A small bundle of green fantasy wild herbs tied with twine.",
                 BaseItemSelectionNote = "Runtime-selected from safe live ItemDB entries, preferring plant/organic-looking native visuals and refusing rock/ore/coral fallbacks."
             });
 
@@ -34,6 +37,9 @@ namespace ErenshorCraftingExpanded
                 Value = 1,
                 DefaultGrantQuantity = 1,
                 VisualKind = CustomItemVisualKind.OrganicFungus,
+                Category = "resource/fungus", Tier = 2, Rarity = "uncommon",
+                IconAssetPath = "assets/icons/cave_mushroom.png",
+                IconDescription = "A pale fantasy cave mushroom cluster with a stout stem.",
                 BaseItemSelectionNote = "Runtime-selected only from safe live ItemDB entries whose native name is explicitly mushroom/fungus-like; no generic plant or rock fallback."
             });
 
@@ -45,6 +51,9 @@ namespace ErenshorCraftingExpanded
                 Value = 1,
                 DefaultGrantQuantity = 1,
                 VisualKind = CustomItemVisualKind.OrganicFlower,
+                Category = "resource/flower", Tier = 2, Rarity = "uncommon",
+                IconAssetPath = "assets/icons/wild_bloom.png",
+                IconDescription = "A hardy purple-and-gold fantasy wildflower bloom.",
                 BaseItemSelectionNote = "Runtime-selected only from safe live ItemDB entries with explicit flower/blossom/bloom/petal evidence."
             });
 
@@ -56,6 +65,9 @@ namespace ErenshorCraftingExpanded
                 Value = 1,
                 DefaultGrantQuantity = 1,
                 VisualKind = CustomItemVisualKind.OrganicMoss,
+                Category = "resource/moss", Tier = 3, Rarity = "rare",
+                IconAssetPath = "assets/icons/cave_moss.png",
+                IconDescription = "A compact tuft of cool green fantasy cave moss on a small stone.",
                 BaseItemSelectionNote = "Runtime-selected only from safe live ItemDB entries with explicit moss/lichen evidence."
             });
 
@@ -67,6 +79,9 @@ namespace ErenshorCraftingExpanded
                 Value = 1,
                 DefaultGrantQuantity = 1,
                 VisualKind = CustomItemVisualKind.OrganicRoot,
+                Category = "resource/root", Tier = 4, Rarity = "rare",
+                IconAssetPath = "assets/icons/blightroot.png",
+                IconDescription = "A twisted dark fantasy root with muted crimson veins.",
                 BaseItemSelectionNote = "Runtime-selected only from safe live ItemDB entries with explicit root/rhizome/briar/bramble/vine/thorn evidence."
             });
         }
@@ -83,6 +98,8 @@ namespace ErenshorCraftingExpanded
             AttemptedThisSession = false;
             LastOutcomes.Clear();
             GameItemRegistryApi.ResetSessionBindings();
+            ExpandedContentItemRegistry.BeginSession();
+            ExpandedContentRecipeRegistry.BeginSession();
             ProductionNativeRecipeRegistry.BeginSession();
             ExperimentalNativeRecipeRegistry.BeginSession();
         }
@@ -135,6 +152,8 @@ namespace ErenshorCraftingExpanded
                 // verified ItemDatabase.Start boundary as custom materials. They do not become
                 // craftable here; ProductionNativeRecipeRegistry activates them later only after
                 // the live forge/runtime proof succeeds.
+                ExpandedContentItemRegistry.TryRegister(itemDatabaseInstance);
+                ExpandedContentRecipeRegistry.TryRegisterIdentities(itemDatabaseInstance);
                 ProductionNativeRecipeRegistry.TryRegisterSavedIdentities(itemDatabaseInstance);
                 if (CraftingConfig.ExperimentalNativeRecipeRegistration != null && CraftingConfig.ExperimentalNativeRecipeRegistration.Value)
                     ExperimentalNativeRecipeRegistry.TryRegister(itemDatabaseInstance);

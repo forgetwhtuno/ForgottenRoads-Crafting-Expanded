@@ -153,9 +153,12 @@ attributes, `WeaponProcOnHit`, `ItemEffectOnClick`, `TeachSpell`, `TeachSkill`, 
 `WornEffect`, `WandEffect`, `BowEffect`) are explicitly zeroed/nulled on the clone as defense in
 depth even though the base-item predicate above should already exclude anything with them set.
 
-Icon: **inherited unchanged from the cloned base item** (no new art shipped, no `Sprite`
-mutation — the clone gets its own `Item.ItemIcon` reference copied by `Instantiate`, which is safe
-since `Sprite` objects aren't touched by this mod at all, only referenced).
+Icon (historical Wild Herb prototype): **inherited unchanged from the cloned base item** in the
+original registration proof. **Current major-content worktree update:** implemented resources/components/
+equipment now have manifest-backed PNG overrides under `assets/icons/`. `ItemIconAssetLoader` loads those
+assets through current Unity image types, assigns the resulting `Sprite` to the cloned `Item.ItemIcon`,
+and deliberately leaves the verified donor icon in place when the file/type/decode/assignment path fails.
+`assets/item-art-manifest.json` is the machine-readable authority for the 25 implemented icon assets.
 
 ## Persistence classification
 

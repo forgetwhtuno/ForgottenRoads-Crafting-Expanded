@@ -5,24 +5,31 @@ namespace ErenshorCraftingExpanded
     // three-clump patch with a single Mineral-Deposit-inspired name-in-bar presentation.
     public static class ForagePresentationPolicy
     {
-        public const float LabelWorldScale = 0.0055f;
-        public const float LabelWidth = 190f;
-        public const float LabelHeight = 30f;
-        public const float LabelFontSize = 17f;
+        public const float LabelWorldScale = 0.0085f;
+        public const float LabelWidth = 244f;
+        public const float LabelHeight = 54f;
+        public const float LabelFontSize = 25f;
+        public const float LabelDistanceScaleStart = 3.5f;
+        public const float LabelDistanceScaleEnd = 8.0f;
+        public const float LabelMaximumDistanceScale = 1.18f;
 
-        public const float BarLeftFraction = 0.04f;
-        public const float BarRightFraction = 0.96f;
-        public const float BarBottomFraction = 0.10f;
-        public const float BarTopFraction = 0.90f;
+        public const float BarLeftFraction = 0.02f;
+        public const float BarRightFraction = 0.98f;
+        public const float BarBottomFraction = 0.06f;
+        public const float BarTopFraction = 0.94f;
 
         public const int PreferredClusterClumpCount = 3;
-        public const float ClusterTargetLargestDimension = 0.58f;
+        public const float ClusterTargetLargestDimension = 0.78f;
         public const float ClusterMinNormalizedScale = 0.10f;
         public const float ClusterMaxNormalizedScale = 1.40f;
-        public const float ClusterMaxOffsetRadius = 0.34f;
+        public const float ClusterMaxOffsetRadius = 0.42f;
+        public const float GroundingTolerance = 0.06f;
+        public const float VisualMinimumLargestDimension = 0.025f;
+        public const float VisualMaximumScaleAxis = 8f;
+        public const float VisualMaximumAnchorHorizontalOffset = 1.25f;
 
-        private static readonly float[] ClusterOffsetX = new float[] { 0f, 0.29f, -0.25f };
-        private static readonly float[] ClusterOffsetZ = new float[] { 0f, 0.12f, -0.18f };
+        private static readonly float[] ClusterOffsetX = new float[] { 0f, 0.35f, -0.31f };
+        private static readonly float[] ClusterOffsetZ = new float[] { 0f, 0.15f, -0.22f };
         private static readonly float[] ClusterYaw = new float[] { 0f, 113f, 247f };
         private static readonly float[] ClusterRelativeScale = new float[] { 1f, 0.78f, 0.66f };
 
@@ -114,6 +121,14 @@ namespace ErenshorCraftingExpanded
             return 0.94f + 0.06f * alpha;
         }
 
+        public static float CalculateLabelDistanceScale(float distance)
+        {
+            if (float.IsNaN(distance) || float.IsInfinity(distance) || distance <= LabelDistanceScaleStart) return 1f;
+            if (distance >= LabelDistanceScaleEnd) return LabelMaximumDistanceScale;
+            float t = (distance - LabelDistanceScaleStart) / (LabelDistanceScaleEnd - LabelDistanceScaleStart);
+            return 1f + (LabelMaximumDistanceScale - 1f) * t;
+        }
+
         public static float LabelWorldWidth() { return LabelWidth * LabelWorldScale; }
         public static float LabelWorldHeight() { return LabelHeight * LabelWorldScale; }
         public static float BarWorldWidth() { return LabelWidth * (BarRightFraction - BarLeftFraction) * LabelWorldScale; }
@@ -122,16 +137,16 @@ namespace ErenshorCraftingExpanded
         internal static string RunSelfTests()
         {
             float normalizedPlant = CalculateNormalizedClusterScale(0.8f);
-            if (normalizedPlant < 0.70f || normalizedPlant > 0.75f)
+            if (normalizedPlant < 0.95f || normalizedPlant > 1.00f)
                 return "FAIL ordinary plant should scale into compact herb patch";
 
             float normalizedBush = CalculateNormalizedClusterScale(1.6f);
-            if (normalizedBush < 0.34f || normalizedBush > 0.38f)
+            if (normalizedBush < 0.47f || normalizedBush > 0.50f)
                 return "FAIL bush fallback should shrink substantially";
 
             float normalizedLarge = CalculateNormalizedClusterScale(6f);
-            if (normalizedLarge != ClusterMinNormalizedScale)
-                return "FAIL giant vegetation normalization should clamp to compact minimum";
+            if (normalizedLarge < 0.12f || normalizedLarge > 0.14f)
+                return "FAIL giant vegetation normalization should remain bounded";
 
             if (CalculateNormalizedClusterScale(float.NaN) != 0f ||
                 CalculateNormalizedClusterScale(float.PositiveInfinity) != 0f ||
@@ -158,10 +173,10 @@ namespace ErenshorCraftingExpanded
             if (TryCalculateGroundingOffset(0f, -3f, out groundingOffset))
                 return "FAIL extreme visual grounding correction should fail closed";
 
-            if (EstimateClusterEnvelopeRadius(0.8f) > 0.66f ||
-                EstimateClusterEnvelopeRadius(1.6f) > 0.66f ||
-                EstimateClusterEnvelopeRadius(6f) > 0.66f)
-                return "FAIL herb cluster envelope should remain resource-sized";
+            if (EstimateClusterEnvelopeRadius(0.8f) > 0.82f ||
+                EstimateClusterEnvelopeRadius(1.6f) > 0.82f ||
+                EstimateClusterEnvelopeRadius(6f) > 0.82f)
+                return "FAIL forage cluster envelope should remain resource-sized";
 
             if (!ShouldShowResourcePresentation(ForageAvailability.Available)) return "FAIL available presentation";
             if (!ShouldShowResourcePresentation(ForageAvailability.Gathering)) return "FAIL gathering presentation";
@@ -178,10 +193,14 @@ namespace ErenshorCraftingExpanded
             float height = LabelWorldHeight();
             float barWidth = BarWorldWidth();
             float barHeight = BarWorldHeight();
-            if (width < 0.95f || width > 1.10f || height < 0.14f || height > 0.19f)
-                return "FAIL compact nameplate dimensions";
-            if (barWidth < 0.90f || barWidth > 1.05f || barHeight < 0.12f || barHeight > 0.15f)
+            if (width < 2.07f || width > 2.09f || height < 0.45f || height > 0.47f)
+                return "FAIL readable nameplate dimensions";
+            if (barWidth < 1.98f || barWidth > 2.00f || barHeight < 0.39f || barHeight > 0.41f)
                 return "FAIL integrated resource bar dimensions";
+            if (CalculateLabelDistanceScale(2f) != 1f) return "FAIL near label distance scale";
+            float midScale = CalculateLabelDistanceScale(5.75f);
+            if (midScale < 1.08f || midScale > 1.10f) return "FAIL mid label distance scale";
+            if (CalculateLabelDistanceScale(12f) != LabelMaximumDistanceScale) return "FAIL far label distance scale clamp";
 
             return "PASS forage presentation policy";
         }

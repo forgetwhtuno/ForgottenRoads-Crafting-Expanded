@@ -1,32 +1,20 @@
 namespace ErenshorCraftingExpanded
 {
-    // Pure final admission gate for an auto-placed resource family. Placement coordinates are
-    // established elsewhere. This policy exists so missing ItemDB donor/scene-mesh evidence and
-    // environment/regional gates are deterministic testable reasons instead of controller-only
-    // branches.
+    // Final auto-placement admission. World threat controls existence; player Foraging skill is
+    // intentionally absent because it controls harvest eligibility later, not whether the node can exist.
     public static class ForageResourceAvailabilityPolicy
     {
-        public static bool CanAutoSpawn(
-            ForageResourceDefinition resource,
-            ForageEnvironmentKind environment,
-            string scene,
-            bool coveredResourcesEnabled,
-            bool itemAvailable,
-            bool visualAvailable,
-            out string reason)
+        public static bool CanAutoSpawn(ForageResourceDefinition resource, ForageEnvironmentKind environment, string scene,
+            bool coveredResourcesEnabled, ForageWorldBand worldBand, bool itemAvailable, bool visualAvailable, out string reason)
         {
             reason = string.Empty;
             if (resource == null) { reason = "resource-missing"; return false; }
-            if (!ForageResourceCatalog.IsRuntimeEnabled(resource, coveredResourcesEnabled))
-            { reason = "resource-disabled"; return false; }
-            if (!ForageEnvironmentPolicy.IsPoolCompatible(environment, resource.Pool))
-            { reason = "wrong-environment"; return false; }
-            if (!ForageRegionalPolicy.IsEligible(resource, scene))
-            { reason = "wrong-region"; return false; }
-            if (!itemAvailable)
-            { reason = "item-donor-unavailable"; return false; }
-            if (!visualAvailable)
-            { reason = "scene-visual-unavailable"; return false; }
+            if (!ForageResourceCatalog.IsRuntimeEnabled(resource, coveredResourcesEnabled)) { reason = "resource-disabled"; return false; }
+            if (!ForageEnvironmentPolicy.IsPoolCompatible(environment, resource.Pool)) { reason = "wrong-environment"; return false; }
+            if (!ForageRegionalPolicy.IsEligible(resource, scene)) { reason = "wrong-region"; return false; }
+            if (!WorldThreatPolicy.Allows(worldBand, resource.WorldBand)) { reason = "world-tier-too-low"; return false; }
+            if (!itemAvailable) { reason = "item-donor-unavailable"; return false; }
+            if (!visualAvailable) { reason = "scene-visual-unavailable"; return false; }
             return true;
         }
 
@@ -34,29 +22,19 @@ namespace ErenshorCraftingExpanded
         {
             ForageResourceDefinition herb = ForageResourceCatalog.FindByKnowledgeKey("wild_herb");
             ForageResourceDefinition fungus = ForageResourceCatalog.FindByKnowledgeKey("cave_mushroom");
-            ForageResourceDefinition bloom = ForageResourceCatalog.FindByKnowledgeKey("wild_bloom");
+            ForageResourceDefinition starleaf = ForageResourceCatalog.FindByKnowledgeKey("starleaf");
             ForageResourceDefinition root = ForageResourceCatalog.FindByKnowledgeKey("blightroot");
-            if (herb == null || fungus == null || bloom == null || root == null)
-                return "FAIL availability test catalog";
-
+            if (herb == null || fungus == null || starleaf == null || root == null) return "FAIL availability test catalog";
             string reason;
-            if (!CanAutoSpawn(herb, ForageEnvironmentKind.Open, "Hidden Hills", false, true, true, out reason))
-                return "FAIL proven Wild Herb should be spawnable: " + reason;
-            if (CanAutoSpawn(bloom, ForageEnvironmentKind.Open, "Hidden Hills", false, false, true, out reason) || reason != "item-donor-unavailable")
-                return "FAIL missing ItemDB donor did not fail closed";
-            if (CanAutoSpawn(bloom, ForageEnvironmentKind.Open, "Hidden Hills", false, true, false, out reason) || reason != "scene-visual-unavailable")
-                return "FAIL missing scene mesh did not fail closed";
-            if (CanAutoSpawn(bloom, ForageEnvironmentKind.Covered, "Hidden Hills", false, true, true, out reason) || reason != "wrong-environment")
-                return "FAIL flower admitted to covered point";
-            if (CanAutoSpawn(root, ForageEnvironmentKind.Open, "Hidden Hills", false, true, true, out reason) || reason != "wrong-region")
-                return "FAIL Blightroot admitted outside The Blight";
-            if (!CanAutoSpawn(root, ForageEnvironmentKind.Open, "The Blight", false, true, true, out reason))
-                return "FAIL proven Blightroot rejected in The Blight: " + reason;
-            if (CanAutoSpawn(fungus, ForageEnvironmentKind.Covered, "Some Cave", false, true, true, out reason) || reason != "resource-disabled")
-                return "FAIL covered experiment leaked while disabled";
-            if (!CanAutoSpawn(fungus, ForageEnvironmentKind.Covered, "Some Cave", true, true, true, out reason))
-                return "FAIL proven covered fungus rejected while experiment enabled: " + reason;
-
+            if (!CanAutoSpawn(herb, ForageEnvironmentKind.Open, "Hidden Hills", false, ForageWorldBand.Starter, true, true, out reason)) return "FAIL starter herb: " + reason;
+            if (!CanAutoSpawn(herb, ForageEnvironmentKind.Open, "Hidden Hills", false, ForageWorldBand.Unknown, true, true, out reason)) return "FAIL unknown-world starter baseline: " + reason;
+            if (CanAutoSpawn(starleaf, ForageEnvironmentKind.Open, "High Zone", false, ForageWorldBand.Unknown, true, true, out reason) || reason != "world-tier-too-low") return "FAIL unknown-world progression exclusion";
+            if (CanAutoSpawn(starleaf, ForageEnvironmentKind.Open, "Faerie's Brake", false, ForageWorldBand.Starter, true, true, out reason) || reason != "world-tier-too-low") return "FAIL Brake-tier Starleaf exclusion";
+            if (!CanAutoSpawn(starleaf, ForageEnvironmentKind.Open, "High Zone", false, ForageWorldBand.High, true, true, out reason)) return "FAIL high-world Starleaf visibility: " + reason;
+            if (CanAutoSpawn(starleaf, ForageEnvironmentKind.Open, "High Zone", false, ForageWorldBand.High, false, true, out reason) || reason != "item-donor-unavailable") return "FAIL donor gate";
+            if (CanAutoSpawn(root, ForageEnvironmentKind.Open, "Hidden Hills", false, ForageWorldBand.High, true, true, out reason) || reason != "wrong-region") return "FAIL region gate";
+            if (!CanAutoSpawn(root, ForageEnvironmentKind.Open, "The Blight", false, ForageWorldBand.MidHigh, true, true, out reason)) return "FAIL Blightroot in eligible world";
+            if (CanAutoSpawn(fungus, ForageEnvironmentKind.Covered, "Cave", false, ForageWorldBand.High, true, true, out reason) || reason != "resource-disabled") return "FAIL covered gate";
             return "PASS forage resource availability policy";
         }
     }

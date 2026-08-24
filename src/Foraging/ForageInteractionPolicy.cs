@@ -21,15 +21,20 @@ namespace ErenshorCraftingExpanded
     }
 
     // Pure policy for the mod-owned Foraging interaction surface. Target acquisition itself is a
-    // bounded pointer raycast against mod-owned trigger hitboxes. Production gathering is click-only:
-    // there is deliberately no keyboard or nearest-node fallback because those inputs can collide with
-    // native Erenshor controls and can gather a resource the player did not actually click.
+    // bounded pointer raycast against mod-owned trigger hitboxes. Production gathering is one-click
+    // RMB: the native PlayerControl.RightClick boundary admits only an exact valid forage target,
+    // then the captured node/token owns the channel until completion or a meaningful interruption.
+    // There is deliberately no keyboard or nearest-node fallback because those inputs can collide
+    // with native Erenshor controls.
     public static class ForageInteractionPolicy
     {
         public const float TargetProbeDistance = 8f;
         public const float TargetProbeIntervalSeconds = 0.12f;
-        public const float MinimumHitRadius = 0.38f;
-        public const float MaximumHitRadius = 0.72f;
+        public const float MinimumHitRadius = 0.58f;
+        public const float MaximumHitRadius = 0.95f;
+        public const float MinimumHitHeight = 1.35f;
+        public const float MaximumHitHeight = 2.10f;
+        public const float RayHitTieEpsilon = 0.002f;
 
         public static ForageInteractionEvaluation Evaluate(
             bool hasNode,
@@ -84,7 +89,7 @@ namespace ErenshorCraftingExpanded
             return result;
         }
 
-        // Click-to-gather is intentionally exact: only the resource hit by the pointer may own the
+        // Click admission is intentionally exact: only the resource hit by the pointer may own the
         // gather transaction. A missing pointer hit never falls back to a nearby node.
         public static int SelectClickedCandidate(int targetedIndex, int nodeCount)
         {
@@ -128,10 +133,30 @@ namespace ErenshorCraftingExpanded
         public static float CalculateHitRadius(float visualWidth, float visualDepth)
         {
             if (!IsFinitePositive(visualWidth) || !IsFinitePositive(visualDepth)) return MinimumHitRadius;
-            float radius = Math.Max(visualWidth, visualDepth) * 0.52f;
+            float radius = Math.Max(visualWidth, visualDepth) * 0.62f + 0.08f;
             if (radius < MinimumHitRadius) radius = MinimumHitRadius;
             if (radius > MaximumHitRadius) radius = MaximumHitRadius;
             return radius;
+        }
+
+        public static float CalculateHitHeight(float visualHeight, float hitRadius)
+        {
+            float safeRadius = IsFinitePositive(hitRadius) ? hitRadius : MinimumHitRadius;
+            float height = IsFinitePositive(visualHeight) ? visualHeight * 1.30f + 0.25f : MinimumHitHeight;
+            float minimumForCapsule = safeRadius * 2f;
+            if (height < minimumForCapsule) height = minimumForCapsule;
+            if (height < MinimumHitHeight) height = MinimumHitHeight;
+            if (height > MaximumHitHeight) height = MaximumHitHeight;
+            return height;
+        }
+
+        public static bool ShouldPreferPointerHit(float candidateDistance, string candidateId, float selectedDistance, string selectedId)
+        {
+            if (!IsFiniteNonNegative(candidateDistance)) return false;
+            if (!IsFiniteNonNegative(selectedDistance) || float.IsInfinity(selectedDistance)) return true;
+            if (candidateDistance + RayHitTieEpsilon < selectedDistance) return true;
+            if (Math.Abs(candidateDistance - selectedDistance) > RayHitTieEpsilon) return false;
+            return string.Compare(candidateId ?? string.Empty, selectedId ?? string.Empty, StringComparison.Ordinal) < 0;
         }
 
         public static bool ShouldLogEligibilityTransition(string previousNodeId, ForageInteractionEligibility previous, string nextNodeId, ForageInteractionEligibility next)
@@ -155,6 +180,8 @@ namespace ErenshorCraftingExpanded
             if (!ready.CanGather || ready.Eligibility != ForageInteractionEligibility.Ready) return "FAIL ready interaction";
             ForageInteractionEvaluation outOfRange = Evaluate(true, true, 4f, 3.5f, true, 4, 1);
             if (outOfRange.CanGather || outOfRange.Eligibility != ForageInteractionEligibility.OutOfRange) return "FAIL range gate";
+            ForageInteractionEvaluation playerUnavailable = Evaluate(true, true, float.PositiveInfinity, 3.5f, true, 4, 1);
+            if (playerUnavailable.CanGather || playerUnavailable.Eligibility != ForageInteractionEligibility.OutOfRange) return "FAIL missing-player target evaluation";
             ForageInteractionEvaluation depleted = Evaluate(true, false, 1f, 3.5f, true, 4, 1);
             if (depleted.CanGather || depleted.Eligibility != ForageInteractionEligibility.Depleted) return "FAIL depletion gate";
             ForageInteractionEvaluation waiting = Evaluate(true, true, 1f, 3.5f, false, 1, 1);
@@ -184,6 +211,12 @@ namespace ErenshorCraftingExpanded
             if (Math.Abs(small - MinimumHitRadius) > 0.001f) return "FAIL minimum interaction hit radius";
             if (ordinary <= MinimumHitRadius || ordinary >= MaximumHitRadius) return "FAIL ordinary interaction hit radius";
             if (Math.Abs(huge - MaximumHitRadius) > 0.001f) return "FAIL maximum interaction hit radius";
+            float ordinaryHeight = CalculateHitHeight(0.75f, ordinary);
+            if (ordinaryHeight < ordinary * 2f || ordinaryHeight > MaximumHitHeight) return "FAIL nonblocking interaction capsule height";
+            if (CalculateHitHeight(float.NaN, MinimumHitRadius) < MinimumHitHeight) return "FAIL invalid interaction height fallback";
+            if (!ShouldPreferPointerHit(1.2f, "b", 1.4f, "a")) return "FAIL closest pointer hit priority";
+            if (!ShouldPreferPointerHit(1.2f, "a", 1.2f, "b")) return "FAIL stable overlapping pointer tie break";
+            if (ShouldPreferPointerHit(1.2f, "b", 1.2f, "a")) return "FAIL overlapping pointer tie break reversed";
 
             if (!ShouldLogEligibilityTransition("a", ForageInteractionEligibility.Ready, "b", ForageInteractionEligibility.Ready))
                 return "FAIL target change diagnostic transition";

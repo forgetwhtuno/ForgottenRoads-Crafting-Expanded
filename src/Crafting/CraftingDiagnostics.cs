@@ -27,7 +27,7 @@ namespace ErenshorCraftingExpanded
                 " inventory=" + CountInventoryItem(CraftingExpandedItemIds.WildHerbId));
             lines.Add("Custom items covered: CaveMushroom=" + DescribeItemOutcome(CraftingExpandedItemIds.CaveMushroomId, fungusOutcome) +
                 " inventory=" + CountInventoryItem(CraftingExpandedItemIds.CaveMushroomId) +
-                " experimental=" + (ForagingConfig.ExperimentalCoveredResources != null && ForagingConfig.ExperimentalCoveredResources.Value ? "on" : "off"));
+                " coveredResources=" + (ForagingConfig.ExperimentalCoveredResources != null && ForagingConfig.ExperimentalCoveredResources.Value ? "on" : "off"));
             lines.Add("Custom items evidence-gated: WildBloom=" +
                 DescribeItemOutcome(CraftingExpandedItemIds.WildBloomId, CraftingExpandedItems.Outcome(CraftingExpandedItemIds.WildBloomId)) +
                 " CaveMoss=" +
@@ -64,7 +64,8 @@ namespace ErenshorCraftingExpanded
 
             lines.Add("Primary node: " + ForageNodeController.DescribePrimaryNode());
             lines.Add("Foraging interaction: " + ForageNodeController.LastTargetSummary +
-                " | " + ForageNodeController.LastEligibilitySummary);
+                " | " + ForageNodeController.LastEligibilitySummary +
+                " | " + ForageNodeController.LastTargetInvariantSummary);
             lines.Add("Foraging gather: " + ForageNodeController.DescribeActiveGather());
             lines.Add("Foraging transaction: " + ForageNodeController.LastGatherTransactionSummary +
                 " | lastItem=" + (string.IsNullOrEmpty(ForageNodeController.LastGatherSummary) ? "(none)" : ForageNodeController.LastGatherSummary) +
@@ -75,10 +76,19 @@ namespace ErenshorCraftingExpanded
             lines.Add("Native crafting evidence: " + NativeCraftingRuntimeProbe.Describe());
             lines.Add("Native recipe examples: " + NativeCraftingRuntimeProbe.DescribeExamples());
             lines.Add("Native recipe outputs: " + NativeCraftingRuntimeProbe.DescribeOutputs());
-            lines.Add("Recipes: production=" + CraftingRecipeCatalog.Production.Count + "/" + ProductionRecipePlan.All.Count +
-                " productionGate=" + (CraftingConfig.EnableProductionNativeRecipes != null && CraftingConfig.EnableProductionNativeRecipes.Value ? "ON" : "OFF") +
-                " nativeCatalog={" + ProductionNativeRecipeRegistry.Describe() + "}" +
-                " experimentalNative={" + ExperimentalNativeRecipeRegistry.Describe() + "}");
+            lines.Add("Expanded content: enabled=" + (CraftingConfig.EnableExpandedContent != null && CraftingConfig.EnableExpandedContent.Value ? "yes" : "no") +
+                " items=" + ExpandedContentItemRegistry.AvailableCount + "/" + ExpandedContentItems.All.Count +
+                " itemFailures=" + ExpandedContentItemRegistry.FailureCount +
+                " icons=" + ItemIconAssetLoader.LoadedCount + "/25" +
+                " recipeIdentities=" + ExpandedContentRecipeRegistry.IdentityCount + "/" + ExpandedContentRecipes.All.Count +
+                " activeRecipes=" + ExpandedContentRecipeRegistry.ActiveCount + "/" + ExpandedContentRecipes.All.Count +
+                (string.IsNullOrEmpty(ExpandedContentRecipeRegistry.LastFailure) ? string.Empty : " recipeStatus={" + ExpandedContentRecipeRegistry.LastFailure + "}"));
+            string expandedFailures = ExpandedContentItemRegistry.DescribeFailures(3);
+            if (!string.IsNullOrEmpty(expandedFailures)) lines.Add("Expanded item failures: " + expandedFailures);
+            lines.Add("Inventory semantics: " + GameItemRegistryApi.DescribeOwnedInventorySemanticsSummary() + " | detail=/craftdiag items");
+            lines.Add("Legacy native recipe experiment: catalog=" + ProductionNativeRecipeRegistry.Describe() +
+                " gate=" + (CraftingConfig.EnableProductionNativeRecipes != null && CraftingConfig.EnableProductionNativeRecipes.Value ? "ON" : "OFF") +
+                " verification={" + ExperimentalNativeRecipeRegistry.Describe() + "}");
 
             RecipeBookSnapshot recipeBook = RecipeOwnershipController.BuildBookSnapshot(CraftingController.Progress.Level);
             lines.Add("Recipe ownership: registered=" + RecipeOwnershipController.RegisteredRecipeCount +
@@ -99,6 +109,79 @@ namespace ErenshorCraftingExpanded
             try { foreach (string line in lines) UpdateSocialLog.LogAdd(line, "yellow"); } catch { }
         }
 
+        internal static void ReportWorldTier()
+        {
+            try
+            {
+                WorldThreatSnapshot threat = WorldThreatRuntime.Current;
+                if (threat == null)
+                {
+                    UpdateSocialLog.LogAdd("[Crafting] World tier: scene=" + SafeSceneName() + " state=stabilizing scanned=" + WorldThreatRuntime.LastScanned + " rejected=" + WorldThreatRuntime.LastRejected, "yellow");
+                    return;
+                }
+                UpdateSocialLog.LogAdd("[Crafting] World tier: " + threat.Summary() + " scanned=" + WorldThreatRuntime.LastScanned + " rejected=" + WorldThreatRuntime.LastRejected, "yellow");
+                List<string> eligible = new List<string>(); List<string> blocked = new List<string>();
+                List<ForageResourceDefinition> resources = ForageResourceCatalog.All();
+                for (int i = 0; i < resources.Count; i++)
+                {
+                    ForageResourceDefinition r = resources[i];
+                    (WorldThreatPolicy.Allows(threat.Band, r.WorldBand) ? eligible : blocked).Add(r.DisplayName);
+                }
+                UpdateSocialLog.LogAdd("[Crafting] World tier eligible: " + string.Join(", ", eligible.ToArray()), "yellow");
+                UpdateSocialLog.LogAdd("[Crafting] World tier blocked: " + (blocked.Count == 0 ? "none" : string.Join(", ", blocked.ToArray())), "yellow");
+            }
+            catch { }
+        }
+
+        internal static void ReportResources()
+        {
+            try
+            {
+                List<ForageResourceDefinition> resources = ForageResourceCatalog.All();
+                UpdateSocialLog.LogAdd("[Crafting] Resources: " + resources.Count + " identities; world tier controls existence, Foraging controls harvest.", "yellow");
+                for (int i = 0; i < resources.Count; i++)
+                {
+                    ForageResourceDefinition r = resources[i];
+                    UpdateSocialLog.LogAdd("[Crafting] " + r.DisplayName + " | world=" + WorldThreatPolicy.DisplayName(r.WorldBand) + " | Foraging=" + r.MinimumSkill +
+                        " | pool=" + r.Pool + " | density=" + r.DensityWeight + "/cap" + r.MaxAutoNodesPerScene + " | item=" +
+                        (GameItemRegistryApi.IsCustomItemAvailable(r.RewardItemId) ? "ready" : "unavailable") + " | purpose=" + r.FutureCraftingPurpose, "yellow");
+                }
+            }
+            catch { }
+        }
+
+        internal static void ReportConsumables()
+        {
+            try
+            {
+                List<string> lines = GameItemRegistryApi.BuildConsumableReferenceLines(8);
+                for (int i = 0; i < lines.Count; i++) UpdateSocialLog.LogAdd("[Crafting] " + lines[i], "yellow");
+            }
+            catch { }
+        }
+
+        internal static void ReportNativeConsumables()
+        {
+            try
+            {
+                List<string> lines = GameItemRegistryApi.BuildNativeConsumableReferenceLines(16);
+                for (int i = 0; i < lines.Count; i++) UpdateSocialLog.LogAdd("[Crafting] " + lines[i], "yellow");
+            }
+            catch { }
+        }
+
+        internal static void ReportRecipes()
+        {
+            try
+            {
+                IList<CustomRecipeDefinition> recipes = ExpandedContentRecipes.All;
+                UpdateSocialLog.LogAdd("[Crafting] Production recipes: " + recipes.Count + " physical native Smithing templates.", "yellow");
+                for (int i = 0; i < recipes.Count; i++)
+                    UpdateSocialLog.LogAdd("[Crafting] " + recipes[i].DisplayName + " | " + CraftingKnowledgePresentationPolicy.BuildRecipeRequirementSummary(recipes[i]), "yellow");
+            }
+            catch { }
+        }
+
         internal static void ReportGiveHerb()
         {
             bool granted = GameItemRegistryApi.GrantRegisteredItem(CraftingExpandedItemIds.WildHerbId, 1);
@@ -117,6 +200,19 @@ namespace ErenshorCraftingExpanded
                 : "[Erenshor Crafting Expanded] Could not grant Cave Mushroom - state=" + CraftingExpandedItems.State(CraftingExpandedItemIds.CaveMushroomId) +
                   " error=" + CraftingExpandedItems.FailureReason(CraftingExpandedItemIds.CaveMushroomId);
             try { UpdateSocialLog.LogAdd(message, "yellow"); } catch { }
+        }
+
+        internal static void ReportItemSemantics()
+        {
+            try
+            {
+                UpdateSocialLog.LogAdd("[Crafting] Inventory semantics: " + GameItemRegistryApi.DescribeOwnedInventorySemanticsSummary(), "yellow");
+                List<string> itemLines = GameItemRegistryApi.BuildOwnedInventorySemanticsLines(25);
+                for (int i = 0; i < itemLines.Count; i++) UpdateSocialLog.LogAdd("[Crafting] " + itemLines[i], "yellow");
+                List<string> nativeLines = GameItemRegistryApi.BuildNativeInventorySemanticsReferenceLines();
+                for (int i = 0; i < nativeLines.Count; i++) UpdateSocialLog.LogAdd("[Crafting] " + nativeLines[i], "yellow");
+            }
+            catch { }
         }
 
         internal static void ReportRecipeExperimentStatus()

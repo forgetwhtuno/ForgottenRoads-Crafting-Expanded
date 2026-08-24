@@ -1,0 +1,257 @@
+{
+  "schema_version": 1,
+  "icon_size": "128x128",
+  "background": "transparent",
+  "items": [
+    {
+      "stable_item_id": "910000001",
+      "display_name": "Wild Herb",
+      "category": "resource/herb",
+      "tier": 1,
+      "rarity": "common",
+      "visual_description": "A small bundle of green fantasy wild herbs tied with twine.",
+      "icon_asset_path": "assets/icons/wild_herb.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910000002",
+      "display_name": "Cave Mushroom",
+      "category": "resource/fungus",
+      "tier": 2,
+      "rarity": "uncommon",
+      "visual_description": "A pale fantasy cave mushroom cluster with a stout stem.",
+      "icon_asset_path": "assets/icons/cave_mushroom.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910000003",
+      "display_name": "Wild Bloom",
+      "category": "resource/flower",
+      "tier": 2,
+      "rarity": "uncommon",
+      "visual_description": "A hardy purple-and-gold fantasy wildflower bloom.",
+      "icon_asset_path": "assets/icons/wild_bloom.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910000004",
+      "display_name": "Cave Moss",
+      "category": "resource/moss",
+      "tier": 3,
+      "rarity": "rare",
+      "visual_description": "A compact tuft of cool green fantasy cave moss on a small stone.",
+      "icon_asset_path": "assets/icons/cave_moss.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910000005",
+      "display_name": "Blightroot",
+      "category": "resource/root",
+      "tier": 4,
+      "rarity": "rare",
+      "visual_description": "A twisted dark fantasy root with muted crimson veins.",
+      "icon_asset_path": "assets/icons/blightroot.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910000006",
+      "display_name": "Field Fiber",
+      "category": "resource/fiber",
+      "tier": 1,
+      "rarity": "common",
+      "visual_description": "A tied bundle of pale green and straw-colored fantasy plant fibers.",
+      "icon_asset_path": "assets/icons/field_fiber.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910000007",
+      "display_name": "Resin Sprig",
+      "category": "resource/wood",
+      "tier": 1,
+      "rarity": "common",
+      "visual_description": "A short dark fantasy twig with amber resin beads.",
+      "icon_asset_path": "assets/icons/resin_sprig.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910000008",
+      "display_name": "Starleaf",
+      "category": "resource/herb",
+      "tier": 2,
+      "rarity": "rare",
+      "visual_description": "A single five-point fantasy leaf with faint cool magical veins.",
+      "icon_asset_path": "assets/icons/starleaf.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910000009",
+      "display_name": "Ghostcap",
+      "category": "resource/fungus",
+      "tier": 3,
+      "rarity": "rare",
+      "visual_description": "A pale translucent cave mushroom cap with a faint spectral glow.",
+      "icon_asset_path": "assets/icons/ghostcap.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910010001",
+      "display_name": "Woven Fiber Cord",
+      "category": "component",
+      "tier": 1,
+      "rarity": "common",
+      "visual_description": "A compact coil of braided natural cord.",
+      "icon_asset_path": "assets/icons/woven_fiber_cord.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910010002",
+      "display_name": "Herbal Binder",
+      "category": "component",
+      "tier": 1,
+      "rarity": "common",
+      "visual_description": "A small stoppered ceramic jar with green herbal paste.",
+      "icon_asset_path": "assets/icons/herbal_binder.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910010003",
+      "display_name": "Resin-Sealed Grip",
+      "category": "component",
+      "tier": 1,
+      "rarity": "uncommon",
+      "visual_description": "A short leather-and-cord weapon grip sealed with amber resin.",
+      "icon_asset_path": "assets/icons/resin_sealed_grip.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910010004",
+      "display_name": "Bloom Tincture",
+      "category": "component",
+      "tier": 2,
+      "rarity": "uncommon",
+      "visual_description": "A small fantasy glass vial of warm floral tincture.",
+      "icon_asset_path": "assets/icons/bloom_tincture.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910010005",
+      "display_name": "Cave Paste",
+      "category": "component",
+      "tier": 3,
+      "rarity": "uncommon",
+      "visual_description": "A squat stone cup containing pale green-gray cave paste.",
+      "icon_asset_path": "assets/icons/cave_paste.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910010006",
+      "display_name": "Starleaf Infusion",
+      "category": "component",
+      "tier": 2,
+      "rarity": "rare",
+      "visual_description": "A narrow fantasy vial with luminous blue-green herbal infusion.",
+      "icon_asset_path": "assets/icons/starleaf_infusion.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910010007",
+      "display_name": "Root Temper",
+      "category": "component",
+      "tier": 4,
+      "rarity": "rare",
+      "visual_description": "A dark iron cup holding deep red-brown root resin.",
+      "icon_asset_path": "assets/icons/root_temper.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910010008",
+      "display_name": "Ghostcap Extract",
+      "category": "component",
+      "tier": 3,
+      "rarity": "rare",
+      "visual_description": "A small violet-gray fantasy vial with ghostly fungal extract.",
+      "icon_asset_path": "assets/icons/ghostcap_extract.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910020001",
+      "display_name": "Trailwood Cudgel",
+      "category": "equipment",
+      "tier": 1,
+      "rarity": "common",
+      "visual_description": "A sturdy fantasy hardwood cudgel wrapped with cord and amber resin.",
+      "icon_asset_path": "assets/icons/trailwood_cudgel.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910020002",
+      "display_name": "Barkguard Maul",
+      "category": "equipment",
+      "tier": 1,
+      "rarity": "common",
+      "visual_description": "A weathered two-handed barkwood maul with fiber lashings and a heavy iron-capped head.",
+      "icon_asset_path": "assets/icons/barkguard_maul.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910020003",
+      "display_name": "Briar Knife",
+      "category": "equipment",
+      "tier": 2,
+      "rarity": "uncommon",
+      "visual_description": "A narrow fantasy dagger with thorn-like guard and wrapped natural grip.",
+      "icon_asset_path": "assets/icons/briar_knife.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910020004",
+      "display_name": "Bloomwood Staff",
+      "category": "equipment",
+      "tier": 2,
+      "rarity": "uncommon",
+      "visual_description": "A tall fantasy wooden staff with flowering knots and subtle starleaf accents.",
+      "icon_asset_path": "assets/icons/bloomwood_staff.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910020005",
+      "display_name": "Starleaf Longbow",
+      "category": "equipment",
+      "tier": 3,
+      "rarity": "rare",
+      "visual_description": "A graceful fantasy longbow of dark wood with faint cool leaf inlays.",
+      "icon_asset_path": "assets/icons/starleaf_longbow.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910020006",
+      "display_name": "Blightroot Blade",
+      "category": "equipment",
+      "tier": 4,
+      "rarity": "rare",
+      "visual_description": "A dark fantasy one-handed blade with root-wrapped hilt and deep crimson resin veins.",
+      "icon_asset_path": "assets/icons/blightroot_blade.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910020007",
+      "display_name": "Rootbound Guard",
+      "category": "equipment",
+      "tier": 4,
+      "rarity": "rare",
+      "visual_description": "A dark wood-and-metal fantasy shield bound by twisted roots.",
+      "icon_asset_path": "assets/icons/rootbound_guard.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    },
+    {
+      "stable_item_id": "910020008",
+      "display_name": "Ghostcap Shiv",
+      "category": "equipment",
+      "tier": 3,
+      "rarity": "rare",
+      "visual_description": "A compact dark fantasy dagger with pale mushroom-like pommel and spectral edge accent.",
+      "icon_asset_path": "assets/icons/ghostcap_shiv.png",
+      "fallback_behavior": "Retain the verified native donor ItemIcon if PNG load/decode/assignment fails; never register a null icon intentionally."
+    }
+  ]
+}

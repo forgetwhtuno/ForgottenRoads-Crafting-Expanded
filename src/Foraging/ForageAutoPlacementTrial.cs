@@ -122,7 +122,8 @@ namespace ErenshorCraftingExpanded
                 " open=" + (accepted.Count - covered) +
                 " covered=" + covered;
 
-            // One safe cluster is acceptable; the target remains 2-3. Never force an ugly placement just to fill the target.
+            // One safe cluster is acceptable; five is only the upper target. Never force an ugly
+            // placement just to fill the population envelope.
             if (!ForagePlacementPolicy.IsUsableClusterCount(accepted.Count))
             {
                 summary += " outsideUsefulClusterRange=" + ForagePlacementPolicy.MinimumUsefulClusterCount + "-" + ForagePlacementPolicy.DesiredClusterCount;
@@ -200,6 +201,8 @@ namespace ErenshorCraftingExpanded
             string nodeId,
             RendererScanResult source,
             ForageResourceDefinition resource,
+            Vector3 finalPosition,
+            float finalRotationY,
             out string summary)
         {
             summary = string.Empty;
@@ -219,6 +222,11 @@ namespace ErenshorCraftingExpanded
 
             GameObject root = new GameObject("ForageCluster_" + nodeId);
             root.layer = source.SourceObject.layer;
+            // Grounding uses world-space renderer bounds. Establish the accepted placement pose
+            // before cloning so every pre/post measurement belongs to the final world location.
+            root.transform.position = finalPosition;
+            root.transform.rotation = Quaternion.Euler(0f, finalRotationY, 0f);
+            root.transform.localScale = Vector3.one;
             int built = 0;
             int clumpCount = resource.VisualClumpCount;
             if (clumpCount < 2) clumpCount = 2;
@@ -288,7 +296,20 @@ namespace ErenshorCraftingExpanded
                 Vector3 local = clone.transform.localPosition;
                 local.y += correction;
                 clone.transform.localPosition = local;
-                return true;
+
+                // Bounds must be sampled again from the final-positioned clone; a predicted
+                // offset alone cannot prove that scaled/rotated donor geometry reached ground.
+                bool postFound = false;
+                float postMinimumY = 0f;
+                foreach (Renderer renderer in clone.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
+                    float value = renderer.bounds.min.y;
+                    if (float.IsNaN(value) || float.IsInfinity(value)) return false;
+                    if (!postFound || value < postMinimumY) postMinimumY = value;
+                    postFound = true;
+                }
+                return postFound && Mathf.Abs(postMinimumY - clusterRoot.position.y) <= ForagePresentationPolicy.GroundingTolerance;
             }
             catch { return false; }
         }

@@ -58,6 +58,29 @@ namespace ErenshorCraftingExpanded
                 return AddSizeBonus(score, largestDimension);
             }
 
+            if (pool == ForageResourcePool.OpenFibers)
+            {
+                bool explicitFiber = false;
+                if (text.IndexOf("reed", StringComparison.Ordinal) >= 0) { score += 210; explicitFiber = true; }
+                if (text.IndexOf("fiber", StringComparison.Ordinal) >= 0) { score += 205; explicitFiber = true; }
+                if (text.IndexOf("stalk", StringComparison.Ordinal) >= 0) { score += 190; explicitFiber = true; }
+                if (text.IndexOf("grass", StringComparison.Ordinal) >= 0) { score += 160; explicitFiber = true; }
+                if (!explicitFiber) return int.MinValue;
+                return AddSizeBonus(score, largestDimension);
+            }
+
+            if (pool == ForageResourcePool.OpenWood)
+            {
+                bool explicitWood = false;
+                if (text.IndexOf("twig", StringComparison.Ordinal) >= 0) { score += 220; explicitWood = true; }
+                if (text.IndexOf("sapling", StringComparison.Ordinal) >= 0) { score += 205; explicitWood = true; }
+                if (text.IndexOf("shrub", StringComparison.Ordinal) >= 0) { score += 185; explicitWood = true; }
+                if (text.IndexOf("bush", StringComparison.Ordinal) >= 0) { score += 175; explicitWood = true; }
+                if (text.IndexOf("branch", StringComparison.Ordinal) >= 0) { score += 165; explicitWood = true; }
+                if (!explicitWood || largestDimension > 3.5f) return int.MinValue;
+                return AddSizeBonus(score, largestDimension);
+            }
+
             if (pool == ForageResourcePool.OpenRoots)
             {
                 bool explicitRoot = false;
@@ -94,6 +117,8 @@ namespace ErenshorCraftingExpanded
             if (pool == ForageResourcePool.OpenFlowers) return "flower/blossom/bloom/petal";
             if (pool == ForageResourcePool.CoveredMoss) return "moss/lichen";
             if (pool == ForageResourcePool.OpenRoots) return "root/rhizome/briar/bramble/vine/thorn";
+            if (pool == ForageResourcePool.OpenFibers) return "reed/fiber/stalk/grass";
+            if (pool == ForageResourcePool.OpenWood) return "twig/sapling/shrub/bush/branch";
             return "plant/herb/fern/bush/shrub/grass/foliage/leaf";
         }
 
@@ -169,6 +194,15 @@ namespace ErenshorCraftingExpanded
                 return "FAIL explicit root visual should be accepted";
             if (ScoreCandidate("The Blight", "Bush_A", "BushMesh", 1.0f, ForageResourcePool.OpenRoots) != int.MinValue)
                 return "FAIL root family must not reuse ordinary bush";
+
+            if (ScoreCandidate("Fields", "Tall_Reed_A", "ReedMesh", 1.2f, ForageResourcePool.OpenFibers) <= 0)
+                return "FAIL fiber family should accept reed/stalk evidence";
+            if (ScoreCandidate("Fields", "Fern_A", "FernMesh", 0.8f, ForageResourcePool.OpenFibers) != int.MinValue)
+                return "FAIL fiber family must not reuse generic fern";
+            if (ScoreCandidate("Forest", "Small_Sapling_A", "SaplingMesh", 2.0f, ForageResourcePool.OpenWood) <= 0)
+                return "FAIL wood family should accept small sapling evidence";
+            if (ScoreCandidate("Forest", "Huge_Branch", "BranchMesh", 5.0f, ForageResourcePool.OpenWood) != int.MinValue)
+                return "FAIL wood family must reject oversized branch geometry";
 
             if (ScoreCandidate("Cave/Rock", "Mushroom_Rock", "RockMesh", 0.7f, ForageResourcePool.CoveredFungi) != int.MinValue)
                 return "FAIL geological fungus-looking candidate should remain rejected";
